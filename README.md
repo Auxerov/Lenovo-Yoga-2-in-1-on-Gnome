@@ -8,7 +8,7 @@
 ## 📌 Overview
 This repository contains a modular collection of kernel driver patches, system services, and hardware optimizations tailored specifically for the Lenovo Yoga 7 2-in-1 under Linux.
 
-It provides a single-command master setup script as well as standalone scripts to re-apply any specific driver or performance fix whenever needed.
+It provides a single-command master setup script as well as standalone scripts to re-apply any specific driver, performance, or network bypass fix whenever needed.
 
 ---
 
@@ -34,6 +34,7 @@ cd ~/Documents/"Lenovo 2 in 1 Settings"
 | **`05-disable-remote-desktop-popups.sh`** | **Remote Desktop Notification Suppressor:** Disables the RemoteDesktop XDG portal interface, clears stuck portal sessions, and permanently eliminates the '+ 2 Remote Desktop' nag dialogs and top bar indicators without affecting screen recording or Discord/OBS streaming. |
 | **`06-affinity-linux-optimization.sh`** | **Affinity Suite (Wine) Tuning:** Resolves the fatal new document preset crash by disabling the unimplemented `ninput.dll` stub, forces Wintab mode, configures DXVK low-latency buffer flags (`maxFrameLatency = 1`), and caps memory limit to 8 GB. |
 | **`07-blender-yoga-tuning.sh`** | **Blender & Radeon 780M Tuning:** Unsets legacy ROCm/HIP environment variables to enable native gfx1103 GPU rendering and documents the 3D viewport stylus navigation bindings. |
+| **`08-librewolf-dpi-discord.sh`** | **Discord & Censorship DPI Bypass:** Sets clean Cloudflare/Google DNS, enables Cloudflare DNS-over-HTTPS (DoH), and runs a lightweight local SpoofDPI proxy service (`127.0.0.1:8080`) with selective PAC routing. Discord connects seamlessly with packet fragmentation bypassing ISP inspection, while all other sites connect 100% directly with zero speed loss and zero VPN latency. |
 | **`resources/`** | Contains the HID-BPF C source code (`lenovo_pen_fix.bpf.c`) and precompiled object file (`lenovo_pen_fix.bpf.o`). |
 
 ---
@@ -43,3 +44,6 @@ cd ~/Documents/"Lenovo 2 in 1 Settings"
   - `bat-limit on`     : Caps charging at ~80% (ideal for daily AC power use).
   - `bat-limit off`    : Charges up to 100% (ideal before traveling).
   - `bat-limit status` : Prints current battery level and conservation status.
+- **SpoofDPI Service Control:**
+  - `systemctl --user status spoofdpi.service`  : Checks background DPI bypass proxy status.
+  - `systemctl --user restart spoofdpi.service` : Restarts DPI proxy.

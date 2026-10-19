@@ -43,6 +43,7 @@ SCRIPTS=(
     "05-disable-remote-desktop-popups.sh"
     "06-affinity-linux-optimization.sh"
     "07-blender-yoga-tuning.sh"
+    "08-librewolf-dpi-discord.sh"
 )
 
 TOTAL=${#SCRIPTS[@]}
@@ -79,4 +80,5 @@ echo -e " 4. [Bluetooth] Set Realtek Bluetooth power control to 'on' to prevent 
 echo -e " 5. [Remote Desktop] Suppressed unwanted '+ 2 Remote Desktop' prompts and portal popups."
 echo -e " 6. [Affinity Linux] Fixed new document SEH crash (ninput bypass), tuned DXVK & memory."
 echo -e " 7. [Blender 3D] Enabled Radeon 780M native HIP compute and stylus 3D viewport navigation."
+echo -e " 8. [DPI / Discord] Configured zero-slowdown selective DPI bypass (SpoofDPI + DoH) in LibreWolf."
 echo ""
