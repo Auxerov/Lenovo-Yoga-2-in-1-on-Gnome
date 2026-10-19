@@ -32,15 +32,24 @@ sudo chmod 644 /etc/udev-hid-bpf/lenovo_pen_fix.bpf.o
 # Create Udev rule (loads BPF program when stylus device attaches or wakes up)
 echo "Writing udev rule (/etc/udev/rules.d/99-hid-bpf-lenovo_pen_fix.rules)..."
 sudo tee /etc/udev/rules.d/99-hid-bpf-lenovo_pen_fix.rules > /dev/null << 'EOF'
-ACTION=="add", SUBSYSTEM=="hid", ATTRS{idVendor}=="056a", ATTRS{idProduct}=="5363", RUN{program}+="/usr/bin/udev-hid-bpf add --replace $devpath /etc/udev-hid-bpf/lenovo_pen_fix.bpf.o"
+ACTION!="add|remove", GOTO="hid_bpf_end"
+SUBSYSTEM!="hid", GOTO="hid_bpf_end"
+
+# Lenovo Digital Pen 2 / Wacom HID 5363
+ACTION=="add", ENV{MODALIAS}=="hid:b0018g0101v0000056Ap00005363", RUN{program}+="/usr/bin/udev-hid-bpf add --replace $sys$devpath /etc/udev-hid-bpf/lenovo_pen_fix.bpf.o"
+ACTION=="remove", ENV{MODALIAS}=="hid:b0018g0101v0000056Ap00005363", RUN{program}+="/usr/bin/udev-hid-bpf remove $sys$devpath"
+ACTION=="add", ENV{MODALIAS}=="hid:b0018g*v0000056Ap00005363", RUN{program}+="/usr/bin/udev-hid-bpf add --replace $sys$devpath /etc/udev-hid-bpf/lenovo_pen_fix.bpf.o"
+ACTION=="remove", ENV{MODALIAS}=="hid:b0018g*v0000056Ap00005363", RUN{program}+="/usr/bin/udev-hid-bpf remove $sys$devpath"
+
+LABEL="hid_bpf_end"
 EOF
 
-# Create systemd service for boot-time persistence
+# Create systemd service for boot-time and resume persistence
 echo "Creating systemd service (/etc/systemd/system/lenovo-pen-fix.service)..."
 sudo tee /etc/systemd/system/lenovo-pen-fix.service > /dev/null << 'EOF'
 [Unit]
 Description=Lenovo Digital Pen 2 HID-BPF Driver Fix
-After=systemd-udevd.service
+After=systemd-udevd.service suspend.target hibernate.target hybrid-sleep.target suspend-then-hibernate.target
 Wants=systemd-udevd.service
 
 [Service]
@@ -49,8 +58,21 @@ ExecStart=/bin/bash -c 'for dev in /sys/bus/hid/devices/*056A:5363*; do [ -d "$d
 RemainAfterExit=yes
 
 [Install]
-WantedBy=multi-user.target
+WantedBy=multi-user.target suspend.target hibernate.target hybrid-sleep.target suspend-then-hibernate.target
 EOF
+
+# Sleep/Resume hook to ensure BPF is re-attached immediately after waking from sleep
+echo "Creating system-sleep hook (/etc/systemd/system-sleep/lenovo-pen-fix.sh)..."
+sudo mkdir -p /etc/systemd/system-sleep
+sudo tee /etc/systemd/system-sleep/lenovo-pen-fix.sh > /dev/null << 'EOF'
+#!/bin/sh
+case "$1" in
+    post)
+        /bin/systemctl restart lenovo-pen-fix.service
+        ;;
+esac
+EOF
+sudo chmod +x /etc/systemd/system-sleep/lenovo-pen-fix.sh
 
 sudo systemctl daemon-reload
 sudo systemctl enable --now lenovo-pen-fix.service
