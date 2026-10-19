@@ -9,12 +9,11 @@
 #   1. Radeon 780M RDNA3 (gfx1103) Acceleration:
 #      * Clears legacy HSA_OVERRIDE_GFX_VERSION environment variable so Blender
 #        uses modern, native HIP compute kernels directly on Linux.
-#   2. Stylus 3D Viewport Navigation:
+#   2. Stylus 3D Viewport Navigation & Touch Gestures:
 #      * Lower Barrel Button (Middle Click) -> Orbit 3D Viewport (view3d.rotate)
-#      * Upper Barrel Button (Button 5 / Forward) -> Pan 3D Viewport (view3d.move / Shift + Middle Click)
-#      * Forces XWayland mode (WAYLAND_DISPLAY="") so GNOME reliably delivers Button 5
-#        events without tablet tool drop issues in both system and Steam Blender.
-#      * Injects and persists BUTTON5MOUSE and BUTTON4MOUSE into Blender user preferences.
+#      * Upper Barrel Button -> Pan 3D Viewport via Vimender direct hardware evdev
+#      * Runs on Native Wayland (100% crisp fractional 1.25x scaling, no XWayland blur or giant UI)
+#      * Elevates input group permissions so evdev multi-touch and stylus work out-of-the-box
 # ==============================================================================
 
 set -e
@@ -24,11 +23,16 @@ mkdir -p ~/.local/bin
 
 cat << 'EOF' > ~/.local/bin/blender
 #!/usr/bin/env bash
+# System Blender Launcher - Native Wayland with elevated input group permissions
+
 # Clear legacy GPU overrides so Radeon 780M (gfx1103) utilizes native HIP compute
 unset HSA_OVERRIDE_GFX_VERSION
 
-# Force XWayland for rock-solid stylus middle-click and button 5 navigation
-export WAYLAND_DISPLAY=""
+# Elevate process credentials to include 'input' group for hardware evdev multi-touch & stylus
+if ! id -G | grep -qw 104; then
+    CMD="$(printf '%q ' "$0" "$@")"
+    exec sg input -c "$CMD"
+fi
 
 exec /usr/bin/blender "$@"
 EOF
@@ -44,20 +48,23 @@ if [ -d "$STEAM_BLENDER_DIR" ]; then
 
     cat << 'EOF' > "$STEAM_BLENDER_DIR/blender"
 #!/usr/bin/env bash
-# Steam Blender Wrapper - Force XWayland for seamless stylus navigation (Orbit & Pan)
+# Steam Blender Launcher - Native Wayland with elevated input group permissions
+
+# Clear legacy GPU overrides so Radeon 780M (gfx1103) utilizes native HIP compute
+unset HSA_OVERRIDE_GFX_VERSION
+
+# Elevate process credentials to include 'input' group for hardware evdev multi-touch & stylus
+if ! id -G | grep -qw 104; then
+    CMD="$(printf '%q ' "$0" "$@")"
+    exec sg input -c "$CMD"
+fi
 
 DIR="$(dirname "$(readlink -f "$0")")"
-
-# Force XWayland so GNOME forwards stylus upper barrel button (Forward/BUTTON5MOUSE -> Pan)
-export WAYLAND_DISPLAY=""
 
 # Ensure bundled libraries are prioritized
 if [ -d "$DIR/lib" ]; then
     export LD_LIBRARY_PATH="$DIR/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 fi
-
-# Clear legacy GPU overrides so Radeon 780M (gfx1103) utilizes native HIP compute
-unset HSA_OVERRIDE_GFX_VERSION
 
 exec "$DIR/blender.bin" "$@"
 EOF
