@@ -1,0 +1,18 @@
+/* Foliate Mat Siyah & Yumuşak Beyaz Okuma Stili (Matte Black Theme) */
+html, body {
+    background-color: #121212 !important;
+    color: #e0e0e0 !important;
+}
+
+body * {
+    background-color: transparent !important;
+    color: #e0e0e0 !important;
+}
+
+a, a:visited, a:hover {
+    color: #89b4fa !important;
+}
+
+img, svg {
+    filter: none !important;
+}

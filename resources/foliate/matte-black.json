@@ -1,0 +1,13 @@
+{
+    "label": "Mat Siyah (Matte Black)",
+    "light": {
+        "fg": "#e0e0e0",
+        "bg": "#121212",
+        "link": "#89b4fa"
+    },
+    "dark": {
+        "fg": "#e0e0e0",
+        "bg": "#121212",
+        "link": "#89b4fa"
+    }
+}

@@ -36,7 +36,8 @@ cd ~/Documents/"Lenovo 2 in 1 Settings"
 | **`07-blender-yoga-tuning.sh`** | **Blender & Radeon 780M Tuning:** Unsets legacy ROCm/HIP environment variables to enable native gfx1103 GPU rendering, and automatically injects stylus 3D viewport navigation keymaps (Lower button = Orbit / Middle Click, Upper button = Pan / Shift + Middle Click via `BUTTON5MOUSE`). |
 | **`Blender on 2 in 1.sh`** | **Comprehensive Blender Suite Setup:** All-in-one setup for Blender on Lenovo Yoga 7 2-in-1. Configures Radeon 780M HIP compute, Wayland HiDPI scaling, evdev input group elevation, GNOME Stylus dconf mappings, Blender viewport keymaps, Vimender addon deployment, and `.desktop` launcher. |
 | **`08-librewolf-dpi-discord.sh`** | **Discord & Censorship DPI Bypass:** Sets clean Cloudflare/Google DNS, enables Cloudflare DNS-over-HTTPS (DoH), and runs a lightweight local SpoofDPI proxy service (`127.0.0.1:8080`) with selective PAC routing. Discord connects seamlessly with packet fragmentation bypassing ISP inspection, while all other sites connect 100% directly with zero speed loss and zero VPN latency. |
-| **`resources/`** | Contains the HID-BPF C source code (`lenovo_pen_fix.bpf.c`) and precompiled object file (`lenovo_pen_fix.bpf.o`). |
+| **`09-foliate-vertical-matte-black.sh`** | **Foliate Continuous Vertical Reading & Matte Black:** Enables continuous vertical scrolling (webtoon / document mode), installs a soothing matte black background theme (`#121212` / `#e0e0e0` text) to eliminate glare, and patches the Foliate paginator so scrolling or swiping past a chapter boundary seamlessly advances to the next/previous section. |
+| **`resources/`** | Contains the HID-BPF C source code (`lenovo_pen_fix.bpf.c`), precompiled object (`lenovo_pen_fix.bpf.o`), and Foliate continuous reading assets (`paginator.js`, `matte-black.json`, `user-stylesheet.css`, `foliate.wrapper`). |
 
 ---
 
