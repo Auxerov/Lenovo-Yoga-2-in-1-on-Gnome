@@ -21,6 +21,14 @@
 #        previous chapter at the bottom (anchor 1).
 #      * Works seamlessly with touchpad, mouse wheel, and touchscreen gestures,
 #        incorporating momentum cooldown to prevent accidental chapter skipping.
+#   4. Shelf System & Collection Management:
+#      * Adds a full shelf management system to organize books into custom
+#        collections (e.g. Favorites, Reading, Completed, and user-defined shelves).
+#      * Allows filtering library books by selecting any shelf in the sidebar.
+#   5. Right-Click "Mark as Read" (100% Progress):
+#      * Enables right-clicking any book card or row to mark it as Read (instantly
+#        setting progress to 100% and moving to Completed shelf) or Mark as Unread (0%).
+#      * Provides an "Add to Shelf…" action to easily toggle shelf memberships.
 # ==============================================================================
 
 set -e
@@ -36,11 +44,11 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 RESOURCES_DIR="${SCRIPT_DIR}/resources/foliate"
 FOLIATE_CONFIG_DIR="${HOME}/.config/com.github.johnfactotum.Foliate"
 THEMES_DIR="${FOLIATE_CONFIG_DIR}/themes"
-OVERRIDES_DIR="${FOLIATE_CONFIG_DIR}/overrides/foliate-js"
+OVERRIDES_DIR="${FOLIATE_CONFIG_DIR}/overrides"
 LOCAL_BIN_DIR="${HOME}/.local/bin"
 LOCAL_APPS_DIR="${HOME}/.local/share/applications"
 
-echo -e "${BLUE}=== [1/5] Checking Foliate Installation ===${NC}"
+echo -e "${BLUE}=== [1/6] Checking Foliate Installation ===${NC}"
 if ! command -v foliate &>/dev/null && [ ! -f "/usr/bin/foliate" ]; then
     echo -e "${YELLOW}[!] Foliate is not currently installed.${NC}"
     echo -e "${YELLOW}[!] Installing Foliate via DNF...${NC}"
@@ -48,7 +56,7 @@ if ! command -v foliate &>/dev/null && [ ! -f "/usr/bin/foliate" ]; then
 fi
 echo -e "${GREEN}[✓] Foliate binary detected.${NC}"
 
-echo -e "${BLUE}=== [2/5] Configuring GSettings for Foliate Viewer ===${NC}"
+echo -e "${BLUE}=== [2/6] Configuring GSettings for Foliate Viewer ===${NC}"
 # Enable continuous scrolled vertical reading mode
 gsettings set com.github.johnfactotum.Foliate.viewer.view scrolled true
 # Activate Matte Black theme by default
@@ -57,7 +65,7 @@ gsettings set com.github.johnfactotum.Foliate.viewer.view theme 'matte-black.jso
 gsettings set com.github.johnfactotum.Foliate.viewer.view animated true
 echo -e "${GREEN}[✓] GSettings updated (scrolled=true, theme='matte-black.json', animated=true).${NC}"
 
-echo -e "${BLUE}=== [3/5] Installing Matte Black Theme and Custom Stylesheet ===${NC}"
+echo -e "${BLUE}=== [3/6] Installing Matte Black Theme and Stylesheet ===${NC}"
 mkdir -p "${THEMES_DIR}"
 
 if [ -f "${RESOURCES_DIR}/matte-black.json" ]; then
@@ -65,7 +73,7 @@ if [ -f "${RESOURCES_DIR}/matte-black.json" ]; then
 else
     cat << 'EOF' > "${THEMES_DIR}/matte-black.json"
 {
-    "label": "Mat Siyah (Matte Black)",
+    "label": "Matte Black",
     "light": {
         "fg": "#e0e0e0",
         "bg": "#121212",
@@ -84,13 +92,18 @@ if [ -f "${RESOURCES_DIR}/user-stylesheet.css" ]; then
     cp "${RESOURCES_DIR}/user-stylesheet.css" "${FOLIATE_CONFIG_DIR}/user-stylesheet.css"
 else
     cat << 'EOF' > "${FOLIATE_CONFIG_DIR}/user-stylesheet.css"
-/* Foliate Mat Siyah & Yumuşak Beyaz Okuma Stili (Matte Black Theme) */
+/* Foliate Matte Black & Soft White Reading Style */
 html, body {
+    background: #121212 !important;
     background-color: #121212 !important;
     color: #e0e0e0 !important;
 }
 
 body * {
+    color: #e0e0e0 !important;
+}
+
+p, div, span, article, section, main, h1, h2, h3, h4, h5, h6, li, blockquote {
     background-color: transparent !important;
     color: #e0e0e0 !important;
 }
@@ -106,18 +119,36 @@ EOF
 fi
 echo -e "${GREEN}[✓] Matte black theme and CSS stylesheet installed.${NC}"
 
-echo -e "${BLUE}=== [4/5] Deploying Continuous Paginator Auto-Advance Patch ===${NC}"
-mkdir -p "${OVERRIDES_DIR}"
+echo -e "${BLUE}=== [4/6] Deploying Continuous Paginator & Reader Overrides ===${NC}"
+mkdir -p "${OVERRIDES_DIR}/foliate-js" "${OVERRIDES_DIR}/reader" "${OVERRIDES_DIR}/ui"
 
 if [ -f "${RESOURCES_DIR}/paginator.js" ]; then
-    cp "${RESOURCES_DIR}/paginator.js" "${OVERRIDES_DIR}/paginator.js"
-    echo -e "${GREEN}[✓] Paginator override deployed from resources.${NC}"
-else
-    echo -e "${RED}[!] Error: ${RESOURCES_DIR}/paginator.js not found!${NC}"
-    exit 1
+    cp "${RESOURCES_DIR}/paginator.js" "${OVERRIDES_DIR}/foliate-js/paginator.js"
+    echo -e "${GREEN}[✓] Paginator override deployed.${NC}"
 fi
 
-echo -e "${BLUE}=== [5/5] Configuring Local Launcher Wrapper & Desktop Entry ===${NC}"
+if [ -f "${RESOURCES_DIR}/reader.js" ]; then
+    cp "${RESOURCES_DIR}/reader.js" "${OVERRIDES_DIR}/reader/reader.js"
+    echo -e "${GREEN}[✓] Reader background override deployed.${NC}"
+fi
+
+echo -e "${BLUE}=== [5/6] Deploying Library Shelf System & Context Menu Overrides ===${NC}"
+if [ -f "${RESOURCES_DIR}/library.js" ]; then
+    cp "${RESOURCES_DIR}/library.js" "${OVERRIDES_DIR}/library.js"
+    echo -e "${GREEN}[✓] Library Shelf & Mark as Read controller deployed.${NC}"
+fi
+
+if [ -f "${RESOURCES_DIR}/book-item.ui" ]; then
+    cp "${RESOURCES_DIR}/book-item.ui" "${OVERRIDES_DIR}/ui/book-item.ui"
+    echo -e "${GREEN}[✓] Book item UI template deployed.${NC}"
+fi
+
+if [ -f "${RESOURCES_DIR}/book-row.ui" ]; then
+    cp "${RESOURCES_DIR}/book-row.ui" "${OVERRIDES_DIR}/ui/book-row.ui"
+    echo -e "${GREEN}[✓] Book row UI template deployed.${NC}"
+fi
+
+echo -e "${BLUE}=== [6/6] Configuring Local Launcher Wrapper & Desktop Entry ===${NC}"
 mkdir -p "${LOCAL_BIN_DIR}" "${LOCAL_APPS_DIR}"
 
 if [ -f "${RESOURCES_DIR}/foliate.wrapper" ]; then
@@ -125,66 +156,10 @@ if [ -f "${RESOURCES_DIR}/foliate.wrapper" ]; then
     chmod +x "${LOCAL_BIN_DIR}/foliate"
 else
     cat << 'EOF' > "${LOCAL_BIN_DIR}/foliate"
-#!/usr/bin/gjs-console -m
-// Foliate launcher with user override support
-const MESON = true
-
-import Gtk from 'gi://Gtk?version=4.0'
-import Gio from 'gi://Gio?version=2.0'
-import GLib from 'gi://GLib?version=2.0'
-import 'gi://Adw?version=1'
-import 'gi://WebKit?version=6.0'
-import { programInvocationName, programArgs, exit }  from 'system'
-import { bindtextdomain, textdomain, gettext as _ } from 'gettext'
-import { setConsoleLogDomain } from 'console'
-
-globalThis.pkg = {
-    name: 'com.github.johnfactotum.Foliate',
-    version: '3.3.0',
-    MESON,
-}
-pkg.userAgent = `Foliate/${pkg.version}`
-
-GLib.set_prgname(pkg.name)
-setConsoleLogDomain(pkg.name)
-Gtk.Window.set_default_icon_name(pkg.name)
-bindtextdomain(pkg.name, GLib.build_filenamev(['/usr/share', 'locale']))
-textdomain(pkg.name)
-
-pkg.localeName = _('Foliate')
-GLib.set_application_name(pkg.localeName)
-
-pkg.datadir = GLib.build_filenamev([GLib.get_user_data_dir(), pkg.name])
-pkg.datapath = path => GLib.build_filenamev([pkg.datadir, path])
-pkg.datafile = path => Gio.File.new_for_path(pkg.datapath(path))
-
-pkg.configdir = GLib.build_filenamev([GLib.get_user_config_dir(), pkg.name])
-pkg.configpath = path => GLib.build_filenamev([pkg.configdir, path])
-
-pkg.cachedir = GLib.build_filenamev([GLib.get_user_cache_dir(), pkg.name])
-pkg.cachepath = path => GLib.build_filenamev([pkg.cachedir, path])
-
-// Register base GResource binary from system installation
-Gio.Resource
-    .load(GLib.build_filenamev(['/usr/share', pkg.name, `${pkg.name}.gresource`]))
-    ._register()
-
-const moduledir = '/' + pkg.name.replaceAll('.', '/')
-const overrideDir = GLib.build_filenamev([pkg.configdir, 'overrides'])
-
-pkg.modulepath = path => GLib.build_filenamev([moduledir, path])
-pkg.moduleuri = path => {
-    const cleanPath = path.startsWith('/') ? path.slice(1) : path
-    const overrideFile = GLib.build_filenamev([overrideDir, cleanPath])
-    if (GLib.file_test(overrideFile, GLib.FileTest.EXISTS)) {
-        return GLib.filename_to_uri(overrideFile, null)
-    }
-    return `resource://${pkg.modulepath(path)}`
-}
-pkg.useResource = MESON
-
-const { Application } = await import(pkg.moduleuri('app.js'))
-exit(await new Application().runAsync([programInvocationName, ...programArgs]))
+#!/usr/bin/env bash
+# Foliate launcher with native GLib GResource overlays for user customization
+export G_RESOURCE_OVERLAYS="/com/github/johnfactotum/Foliate=${HOME}/.config/com.github.johnfactotum.Foliate/overrides"
+exec /usr/bin/foliate "$@"
 EOF
     chmod +x "${LOCAL_BIN_DIR}/foliate"
 fi
@@ -199,5 +174,5 @@ fi
 echo -e "${GREEN}[✓] Foliate wrapper launcher and desktop shortcut configured successfully.${NC}"
 echo ""
 echo -e "${GREEN}==============================================================================${NC}"
-echo -e "${GREEN}  Foliate Vertical Mode & Auto-Advance Setup Completed Successfully!          ${NC}"
+echo -e "${GREEN}  Foliate Vertical Mode, Matte Black & Shelf Setup Completed Successfully!    ${NC}"
 echo -e "${GREEN}==============================================================================${NC}"

@@ -456,6 +456,7 @@ export class Paginator extends HTMLElement {
             height: 100%;
         }
         #top {
+            background-color: #121212;
             --_gap: 7%;
             --_margin: 48px;
             --_max-inline-size: 720px;
@@ -494,16 +495,19 @@ export class Paginator extends HTMLElement {
         #background {
             grid-column: 1 / -1;
             grid-row: 1 / -1;
+            background-color: #121212;
         }
         #container {
             grid-column: 2 / 5;
             grid-row: 2;
             overflow: hidden;
+            background-color: #121212;
         }
         :host([flow="scrolled"]) #container {
             grid-column: 1 / -1;
             grid-row: 1 / -1;
             overflow: auto;
+            background-color: #121212;
         }
         #header {
             grid-column: 3 / 4;
