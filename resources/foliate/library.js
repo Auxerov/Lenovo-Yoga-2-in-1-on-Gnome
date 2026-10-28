@@ -322,7 +322,8 @@ const BookItem = GObject.registerClass({
     }
     update(item, data, cover) {
         this.#item = item
-        const title = formatLanguageMap(data.metadata?.title)
+        const fallbackTitle = item?.get_basename?.()?.replace(/\.[^/.]+$/, '') ?? ''
+        const title = formatLanguageMap(data.metadata?.title) || fallbackTitle
         this._title.text = title
         this._image.load(cover?.then ? null : cover, title)
         this._progress.label = format.percent(fraction(data.progress))
@@ -432,7 +433,8 @@ const BookRow = GObject.registerClass({
     update(item, data) {
         this.#item = item
         const { metadata, progress } = data
-        const title = metadata?.title
+        const fallbackTitle = item?.get_basename?.()?.replace(/\.[^/.]+$/, '') ?? ''
+        const title = formatLanguageMap(metadata?.title) || fallbackTitle
         this._title.label = title
 
         const author = formatAuthors(metadata)

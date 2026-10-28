@@ -29,6 +29,10 @@
 #      * Enables right-clicking any book card or row to mark it as Read (instantly
 #        setting progress to 100% and moving to Completed shelf) or Mark as Unread (0%).
 #      * Provides an "Add to Shelf…" action to easily toggle shelf memberships.
+#   6. Native PDF Reading & File Chooser Integration:
+#      * Full PDF document reading with Mozilla PDF.js rendering.
+#      * Registers PDF MIME types in GTK File Chooser and desktop environment.
+#      * Matte black background and automatic cover page thumbnail generation.
 # ==============================================================================
 
 set -e
@@ -119,12 +123,17 @@ EOF
 fi
 echo -e "${GREEN}[✓] Matte black theme and CSS stylesheet installed.${NC}"
 
-echo -e "${BLUE}=== [4/6] Deploying Continuous Paginator & Reader Overrides ===${NC}"
+echo -e "${BLUE}=== [4/6] Deploying Continuous Paginator, PDF Engine & Reader Overrides ===${NC}"
 mkdir -p "${OVERRIDES_DIR}/foliate-js" "${OVERRIDES_DIR}/reader" "${OVERRIDES_DIR}/ui"
 
 if [ -f "${RESOURCES_DIR}/paginator.js" ]; then
     cp "${RESOURCES_DIR}/paginator.js" "${OVERRIDES_DIR}/foliate-js/paginator.js"
     echo -e "${GREEN}[✓] Paginator override deployed.${NC}"
+fi
+
+if [ -f "${RESOURCES_DIR}/pdf.js" ]; then
+    cp "${RESOURCES_DIR}/pdf.js" "${OVERRIDES_DIR}/foliate-js/pdf.js"
+    echo -e "${GREEN}[✓] PDF engine override deployed.${NC}"
 fi
 
 if [ -f "${RESOURCES_DIR}/reader.js" ]; then
@@ -133,6 +142,11 @@ if [ -f "${RESOURCES_DIR}/reader.js" ]; then
 fi
 
 echo -e "${BLUE}=== [5/6] Deploying Library Shelf System & Context Menu Overrides ===${NC}"
+if [ -f "${RESOURCES_DIR}/app.js" ]; then
+    cp "${RESOURCES_DIR}/app.js" "${OVERRIDES_DIR}/app.js"
+    echo -e "${GREEN}[✓] Application open dialog override deployed.${NC}"
+fi
+
 if [ -f "${RESOURCES_DIR}/library.js" ]; then
     cp "${RESOURCES_DIR}/library.js" "${OVERRIDES_DIR}/library.js"
     echo -e "${GREEN}[✓] Library Shelf & Mark as Read controller deployed.${NC}"
@@ -164,10 +178,14 @@ EOF
     chmod +x "${LOCAL_BIN_DIR}/foliate"
 fi
 
-# Ensure desktop entry launches the user wrapper
-if [ -f "/usr/share/applications/com.github.johnfactotum.Foliate.desktop" ]; then
+# Ensure desktop entry launches the user wrapper with full PDF support
+if [ -f "${RESOURCES_DIR}/com.github.johnfactotum.Foliate.desktop" ]; then
+    cp "${RESOURCES_DIR}/com.github.johnfactotum.Foliate.desktop" "${LOCAL_APPS_DIR}/com.github.johnfactotum.Foliate.desktop"
+    update-desktop-database "${LOCAL_APPS_DIR}" 2>/dev/null || true
+elif [ -f "/usr/share/applications/com.github.johnfactotum.Foliate.desktop" ]; then
     cp "/usr/share/applications/com.github.johnfactotum.Foliate.desktop" "${LOCAL_APPS_DIR}/com.github.johnfactotum.Foliate.desktop"
     sed -i "s|^Exec=foliate %U|Exec=${LOCAL_BIN_DIR}/foliate %U|" "${LOCAL_APPS_DIR}/com.github.johnfactotum.Foliate.desktop"
+    sed -i "s|^MimeType=.*|&application/pdf;|" "${LOCAL_APPS_DIR}/com.github.johnfactotum.Foliate.desktop"
     update-desktop-database "${LOCAL_APPS_DIR}" 2>/dev/null || true
 fi
 
