@@ -45,6 +45,7 @@ SCRIPTS=(
     "07-blender-yoga-tuning.sh"
     "08-librewolf-dpi-discord.sh"
     "09-foliate-vertical-matte-black.sh"
+    "10-appflowy-oled-black-theme.sh"
 )
 
 TOTAL=${#SCRIPTS[@]}
@@ -83,4 +84,5 @@ echo -e " 6. [Affinity Linux] Fixed new document SEH crash (ninput bypass), tune
 echo -e " 7. [Blender 3D] Enabled Radeon 780M native HIP compute and stylus 3D viewport navigation."
 echo -e " 8. [DPI / Discord] Configured zero-slowdown selective DPI bypass (SpoofDPI + DoH) in LibreWolf."
 echo -e " 9. [Foliate E-Reader] Configured continuous vertical scrolling, true matte black theme, auto-chapter advance, shelf system, and right-click mark as read."
+echo -e " 10. [AppFlowy] Installed True Pure Black OLED themes (OLED Black & OLED Monochrome) for optimal battery & display contrast."
 echo ""
