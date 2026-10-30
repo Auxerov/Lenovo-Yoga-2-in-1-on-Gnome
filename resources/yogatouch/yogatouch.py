@@ -10,19 +10,19 @@ import sys
 # Force XCB (XWayland) for reliable Always-on-Top and Non-Focus-Stealing in GNOME Wayland
 os.environ["QT_QPA_PLATFORM"] = "xcb"
 
-import json
+import yaml
 import time
+import subprocess
 from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QGridLayout, QPushButton, QLabel, QMenu, QDialog, QTabWidget,
-    QLineEdit, QComboBox, QSlider, QSpinBox, QCheckBox, QScrollArea,
-    QColorDialog, QMessageBox, QFrame, QGraphicsDropShadowEffect
+    QLineEdit, QComboBox, QSlider, QScrollArea, QMessageBox,
+    QFrame, QGraphicsDropShadowEffect, QPlainTextEdit
 )
-from PyQt6.QtCore import Qt, QPoint, QSize, pyqtSignal, QObject
-from PyQt6.QtGui import QColor, QFont, QIcon, QAction, QCursor
-from PyQt6.QtNetwork import QLocalServer, QLocalSocket
+from PyQt6.QtCore import Qt, QPoint, pyqtSignal, QObject, QFileSystemWatcher, QTimer
+from PyQt6.QtGui import QColor, QFont, QAction
 
-from config import ConfigManager
+from config import ConfigManager, CONFIG_FILE
 from uinput_emitter import InputEmitter
 from gesture_daemon import GestureMonitor
 
@@ -32,46 +32,45 @@ IPC_SERVER_NAME = f"yogatouch_ipc_{os.getuid()}"
 class TouchExpressButton(QPushButton):
     """
     A touch-friendly express key button with dual Tap and Hold/Latch modes.
-    Never steals focus from the active workspace (Blender, Affinity, etc.).
+    Never steals focus from the active workspace (Blender, Affinity, Krita, etc.).
+    Clean typography with zero emojis.
     """
     def __init__(self, item, emitter, parent=None):
         super().__init__(parent)
         self.item = item
         self.emitter = emitter
         self.is_latched = False
-        self.press_start_time = 0
-        
+
         # NEVER steal keyboard/window focus
         self.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         self.setAttribute(Qt.WidgetAttribute.WA_AcceptTouchEvents, True)
-        
+
         self.setup_ui()
 
     def setup_ui(self):
         name = self.item.get("name", "Key")
-        icon = self.item.get("icon", "")
         chord = self.item.get("chord", "")
         mode = self.item.get("mode", "tap")
-        color = self.item.get("color", "zinc")
 
-        display_text = f"{icon} {name}".strip() if icon else name
-        sub_text = chord.upper() if mode == "tap" else f"{chord.upper()} (HOLD)"
-        
-        # Dual-line label
-        self.setText(f"{display_text}\n{sub_text}")
+        display_name = name.upper()
+        if mode == "hold":
+            sub_text = f"{chord.upper()} [HOLD]"
+        else:
+            sub_text = chord.upper()
+
+        self.setText(f"{display_name}\n{sub_text}")
         self.update_style()
 
     def update_style(self):
         color = self.item.get("color", "zinc")
-        mode = self.item.get("mode", "tap")
-        
-        # Color palette
+
+        # Color palette (pure, professional dark accents)
         color_accents = {
-            "blue": ("#1E293B", "#3B82F6", "#60A5FA", "#2563EB"),
-            "purple": ("#2E1065", "#A855F7", "#C084FC", "#7C3AED"),
-            "emerald": ("#064E3B", "#10B981", "#34D399", "#059669"),
-            "red": ("#450A0A", "#EF4444", "#F87171", "#DC2626"),
-            "zinc": ("#18181B", "#3F3F46", "#71717A", "#27272A"),
+            "blue": ("#131D2D", "#1E3A8A", "#60A5FA", "#2563EB"),
+            "purple": ("#1E1035", "#581C87", "#C084FC", "#7C3AED"),
+            "emerald": ("#062D22", "#065F46", "#34D399", "#059669"),
+            "red": ("#2B0C0C", "#7F1D1D", "#F87171", "#DC2626"),
+            "zinc": ("#121215", "#27272A", "#71717A", "#3F3F46"),
         }
         bg, border, text_sub, active_border = color_accents.get(color, color_accents["zinc"])
 
@@ -81,9 +80,9 @@ class TouchExpressButton(QPushButton):
                     background-color: {active_border};
                     color: #FFFFFF;
                     border: 2px solid #FFFFFF;
-                    border-radius: 10px;
-                    font-size: 13px;
-                    font-weight: 600;
+                    border-radius: 8px;
+                    font-size: 11px;
+                    font-weight: 700;
                     padding: 4px;
                     text-align: center;
                 }}
@@ -94,9 +93,9 @@ class TouchExpressButton(QPushButton):
                     background-color: {bg};
                     color: #F4F4F5;
                     border: 1px solid {border};
-                    border-radius: 10px;
-                    font-size: 13px;
-                    font-weight: 500;
+                    border-radius: 8px;
+                    font-size: 11px;
+                    font-weight: 600;
                     padding: 4px;
                     text-align: center;
                 }}
@@ -113,10 +112,9 @@ class TouchExpressButton(QPushButton):
 
     def mousePressEvent(self, event):
         if event.button() == Qt.MouseButton.LeftButton:
-            self.press_start_time = time.time()
             mode = self.item.get("mode", "tap")
             chord = self.item.get("chord", "")
-            
+
             if mode == "hold":
                 if not self.is_latched:
                     self.emitter.press(chord)
@@ -129,10 +127,6 @@ class TouchExpressButton(QPushButton):
                 self.emitter.tap(chord)
         super().mousePressEvent(event)
 
-    def mouseReleaseEvent(self, event):
-        # Momentary release if held for a moment
-        super().mouseReleaseEvent(event)
-
 
 class HeaderBar(QFrame):
     """Sleek PureRef-style header with profile pill, drag handle, and quick controls."""
@@ -144,18 +138,18 @@ class HeaderBar(QFrame):
         self.setup_ui()
 
     def setup_ui(self):
-        self.setFixedHeight(38)
+        self.setFixedHeight(34)
         self.setStyleSheet("""
             QFrame {
-                background-color: #0A0A0A;
-                border-top-left-radius: 14px;
-                border-top-right-radius: 14px;
+                background-color: #000000;
+                border-top-left-radius: 12px;
+                border-top-right-radius: 12px;
                 border-bottom: 1px solid #1F1F23;
             }
         """)
 
         layout = QHBoxLayout(self)
-        layout.setContentsMargins(10, 0, 8, 0)
+        layout.setContentsMargins(8, 0, 8, 0)
         layout.setSpacing(6)
 
         # Profile Pill Button
@@ -163,13 +157,14 @@ class HeaderBar(QFrame):
         self.profile_btn.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         self.profile_btn.setStyleSheet("""
             QPushButton {
-                background-color: #18181B;
+                background-color: #121215;
                 color: #60A5FA;
                 border: 1px solid #27272A;
-                border-radius: 12px;
-                font-size: 11px;
-                font-weight: 600;
-                padding: 3px 10px;
+                border-radius: 11px;
+                font-size: 10px;
+                font-weight: 700;
+                letter-spacing: 0.5px;
+                padding: 2px 8px;
             }
             QPushButton:hover {
                 background-color: #27272A;
@@ -180,27 +175,29 @@ class HeaderBar(QFrame):
         self.profile_btn.clicked.connect(self.main_window.cycle_profile)
         layout.addWidget(self.profile_btn)
 
-        # Drag handle icon in center
-        grip = QLabel("⋮⋮⋮", self)
-        grip.setStyleSheet("color: #52525B; font-size: 14px; font-weight: bold;")
+        # Subtle drag handle in center
+        grip = QLabel(":::", self)
+        grip.setStyleSheet("color: #3F3F46; font-size: 12px; font-weight: bold;")
         grip.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(grip, 1)
 
         # Settings button
-        settings_btn = QPushButton("⚙", self)
-        settings_btn.setFixedSize(24, 24)
+        settings_btn = QPushButton("CFG", self)
+        settings_btn.setFixedSize(26, 20)
         settings_btn.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         settings_btn.setStyleSheet("""
             QPushButton {
                 background-color: transparent;
-                color: #A1A1AA;
-                border: none;
-                font-size: 13px;
-                border-radius: 12px;
+                color: #71717A;
+                border: 1px solid #27272A;
+                font-size: 9px;
+                font-weight: 700;
+                border-radius: 4px;
             }
             QPushButton:hover {
                 background-color: #27272A;
                 color: #FFFFFF;
+                border-color: #3F3F46;
             }
         """)
         settings_btn.clicked.connect(self.main_window.open_settings)
@@ -208,18 +205,18 @@ class HeaderBar(QFrame):
 
         # Close / Hide button
         close_btn = QPushButton("✕", self)
-        close_btn.setFixedSize(24, 24)
+        close_btn.setFixedSize(22, 20)
         close_btn.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         close_btn.setStyleSheet("""
             QPushButton {
                 background-color: transparent;
                 color: #71717A;
                 border: none;
-                font-size: 12px;
-                border-radius: 12px;
+                font-size: 11px;
+                border-radius: 4px;
             }
             QPushButton:hover {
-                background-color: #EF4444;
+                background-color: #DC2626;
                 color: #FFFFFF;
             }
         """)
@@ -230,7 +227,7 @@ class HeaderBar(QFrame):
 
     def update_profile_title(self):
         current = self.main_window.config.active_profile_name
-        self.profile_btn.setText(f"⚡ {current}")
+        self.profile_btn.setText(current.upper())
 
     def mousePressEvent(self, event):
         if event.button() == Qt.MouseButton.LeftButton:
@@ -251,26 +248,25 @@ class HeaderBar(QFrame):
             event.accept()
 
     def mouseDoubleClickEvent(self, event):
-        # Double click snaps to top-right corner
         self.main_window.snap_to_corner("top-right")
 
 
 class SettingsDialog(QDialog):
-    """Full settings and configuration window for profiles, buttons, layout, and gestures."""
+    """Full settings and configuration window for profiles, buttons, layout, gestures, and YAML."""
     def __init__(self, main_window):
         super().__init__(main_window)
         self.main_window = main_window
         self.config = main_window.config
         self.setWindowTitle("YogaTouch Settings")
-        self.setFixedSize(540, 520)
+        self.setFixedSize(620, 560)
         self.setStyleSheet("""
             QDialog {
-                background-color: #0D0D11;
+                background-color: #0A0A0C;
                 color: #E4E4E7;
             }
             QTabWidget::pane {
                 border: 1px solid #27272A;
-                background-color: #121216;
+                background-color: #111114;
                 border-radius: 8px;
             }
             QTabBar::tab {
@@ -282,6 +278,8 @@ class SettingsDialog(QDialog):
                 border-top-left-radius: 6px;
                 border-top-right-radius: 6px;
                 margin-right: 2px;
+                font-size: 12px;
+                font-weight: 500;
             }
             QTabBar::tab:selected {
                 background-color: #27272A;
@@ -292,7 +290,7 @@ class SettingsDialog(QDialog):
                 color: #D4D4D8;
                 font-size: 13px;
             }
-            QLineEdit, QComboBox, QSpinBox {
+            QLineEdit, QComboBox, QPlainTextEdit {
                 background-color: #18181B;
                 color: #FFFFFF;
                 border: 1px solid #3F3F46;
@@ -318,7 +316,8 @@ class SettingsDialog(QDialog):
         self.tabs = QTabWidget(self)
         self.setup_buttons_tab()
         self.setup_profiles_tab()
-        self.setup_appearance_tab()
+        self.setup_layout_gestures_tab()
+        self.setup_yaml_tab()
         main_layout.addWidget(self.tabs)
 
         # Bottom buttons
@@ -337,7 +336,7 @@ class SettingsDialog(QDialog):
         top_bar = QHBoxLayout()
         top_bar.addWidget(QLabel("Active Profile:"))
         self.profile_combo = QComboBox(tab)
-        self.profile_combo.addItems(list(self.config.data["profiles"].keys()))
+        self.profile_combo.addItems(list(self.config.data.get("profiles", {}).keys()))
         self.profile_combo.setCurrentText(self.config.active_profile_name)
         self.profile_combo.currentTextChanged.connect(self.on_profile_switched)
         top_bar.addWidget(self.profile_combo, 1)
@@ -358,17 +357,16 @@ class SettingsDialog(QDialog):
         layout.addWidget(scroll)
 
         self.refresh_buttons_list()
-        self.tabs.addTab(tab, "Buttons & Keys")
+        self.tabs.addTab(tab, "Buttons")
 
     def refresh_buttons_list(self):
-        # Clear layout
         while self.buttons_vbox.count():
             item = self.buttons_vbox.takeAt(0)
             if item.widget():
                 item.widget().deleteLater()
 
         profile = self.profile_combo.currentText()
-        buttons = self.config.data["profiles"].get(profile, [])
+        buttons = self.config.data.get("profiles", {}).get(profile, [])
 
         for idx, btn in enumerate(buttons):
             row = QFrame()
@@ -376,24 +374,23 @@ class SettingsDialog(QDialog):
                 QFrame {
                     background-color: #18181B;
                     border: 1px solid #27272A;
-                    border-radius: 8px;
-                    padding: 6px;
+                    border-radius: 6px;
+                    padding: 4px;
                 }
             """)
             rl = QHBoxLayout(row)
             rl.setContentsMargins(8, 4, 8, 4)
 
-            icon = btn.get("icon", "")
             name = btn.get("name", "")
             chord = btn.get("chord", "")
             mode = btn.get("mode", "tap")
             color = btn.get("color", "zinc")
 
-            label = QLabel(f"{icon} <b>{name}</b>  <span style='color: #A1A1AA'>[{chord.upper()}]</span>  <span style='color: #60A5FA; font-size:11px'>({mode.upper()})</span>")
+            label = QLabel(f"<b>{name.upper()}</b>  <span style='color: #A1A1AA'>[{chord.upper()}]</span>  <span style='color: #60A5FA; font-size:11px'>({mode.upper()})</span>  <span style='color: #71717A; font-size:10px'>[{color}]</span>")
             rl.addWidget(label, 1)
 
             del_btn = QPushButton("✕", row)
-            del_btn.setFixedSize(26, 26)
+            del_btn.setFixedSize(24, 24)
             del_btn.setStyleSheet("background-color: #7F1D1D; color: #FCA5A5; border: none; border-radius: 4px;")
             del_btn.clicked.connect(lambda _, i=idx: self.delete_button(i))
             rl.addWidget(del_btn)
@@ -403,6 +400,8 @@ class SettingsDialog(QDialog):
         self.buttons_vbox.addStretch()
 
     def on_profile_switched(self, name):
+        if not name:
+            return
         self.config.active_profile_name = name
         self.refresh_buttons_list()
         self.main_window.rebuild_buttons()
@@ -410,43 +409,39 @@ class SettingsDialog(QDialog):
 
     def delete_button(self, index):
         profile = self.profile_combo.currentText()
-        buttons = self.config.data["profiles"].get(profile, [])
+        buttons = self.config.data.get("profiles", {}).get(profile, [])
         if 0 <= index < len(buttons):
             del buttons[index]
             self.config.save()
             self.refresh_buttons_list()
             self.main_window.rebuild_buttons()
+            self.sync_yaml_tab_content()
 
     def add_button_dialog(self):
         dlg = QDialog(self)
         dlg.setWindowTitle("Add Express Button")
-        dlg.setFixedSize(360, 300)
+        dlg.setFixedSize(380, 260)
         dlg.setStyleSheet(self.styleSheet())
         layout = QVBoxLayout(dlg)
 
         layout.addWidget(QLabel("Button Name:"))
         name_in = QLineEdit(dlg)
-        name_in.setPlaceholderText("e.g. Undo, Brush, Pan, Shift")
+        name_in.setPlaceholderText("e.g. Undo, Redo, Shift, Brush, Fit View")
         layout.addWidget(name_in)
 
-        layout.addWidget(QLabel("Icon / Symbol (optional):"))
-        icon_in = QLineEdit(dlg)
-        icon_in.setPlaceholderText("e.g. ↶, 🖌️, 🖐️, ⇧, 💾")
-        layout.addWidget(icon_in)
-
-        layout.addWidget(QLabel("Key Shortcut (e.g. ctrl+z, b, space, shift):"))
+        layout.addWidget(QLabel("Key Shortcut (e.g. ctrl+z, b, space, shift, alt):"))
         chord_in = QLineEdit(dlg)
-        chord_in.setPlaceholderText("ctrl+z, shift+ctrl+z, space, b...")
+        chord_in.setPlaceholderText("ctrl+z, shift+ctrl+z, space, b, num1...")
         layout.addWidget(chord_in)
 
-        layout.addWidget(QLabel("Mode:"))
+        layout.addWidget(QLabel("Action Mode:"))
         mode_combo = QComboBox(dlg)
         mode_combo.addItems(["tap", "hold"])
         layout.addWidget(mode_combo)
 
         layout.addWidget(QLabel("Color Accent:"))
         color_combo = QComboBox(dlg)
-        color_combo.addItems(["blue", "purple", "emerald", "red", "zinc"])
+        color_combo.addItems(["zinc", "blue", "purple", "emerald", "red"])
         layout.addWidget(color_combo)
 
         btn_box = QHBoxLayout()
@@ -457,29 +452,29 @@ class SettingsDialog(QDialog):
 
         if dlg.exec():
             name = name_in.text().strip() or "Key"
-            icon = icon_in.text().strip()
             chord = chord_in.text().strip().lower() or "ctrl+z"
             mode = mode_combo.currentText()
             color = color_combo.currentText()
 
             profile = self.profile_combo.currentText()
-            self.config.data["profiles"][profile].append({
-                "name": name,
-                "icon": icon,
-                "chord": chord,
-                "mode": mode,
-                "color": color
-            })
-            self.config.save()
-            self.refresh_buttons_list()
-            self.main_window.rebuild_buttons()
+            if profile in self.config.data.get("profiles", {}):
+                self.config.data["profiles"][profile].append({
+                    "name": name,
+                    "chord": chord,
+                    "mode": mode,
+                    "color": color
+                })
+                self.config.save()
+                self.refresh_buttons_list()
+                self.main_window.rebuild_buttons()
+                self.sync_yaml_tab_content()
 
     def setup_profiles_tab(self):
         tab = QWidget()
         layout = QVBoxLayout(tab)
 
         layout.addWidget(QLabel("<b>Manage Profiles</b>"))
-        
+
         row = QHBoxLayout()
         self.new_profile_name = QLineEdit(tab)
         self.new_profile_name.setPlaceholderText("New profile name...")
@@ -504,13 +499,14 @@ class SettingsDialog(QDialog):
             if item.widget():
                 item.widget().deleteLater()
 
-        for name in list(self.config.data["profiles"].keys()):
+        for name in list(self.config.data.get("profiles", {}).keys()):
             row = QFrame()
-            row.setStyleSheet("background-color: #18181B; border: 1px solid #27272A; border-radius: 8px; padding: 4px;")
+            row.setStyleSheet("background-color: #18181B; border: 1px solid #27272A; border-radius: 6px; padding: 4px;")
             rl = QHBoxLayout(row)
-            rl.addWidget(QLabel(f"<b>{name}</b> ({len(self.config.data['profiles'][name])} buttons)"), 1)
+            btn_count = len(self.config.data["profiles"].get(name, []))
+            rl.addWidget(QLabel(f"<b>{name}</b> ({btn_count} buttons)"), 1)
 
-            if len(self.config.data["profiles"]) > 1:
+            if len(self.config.data.get("profiles", {})) > 1:
                 del_btn = QPushButton("Delete", row)
                 del_btn.setStyleSheet("background-color: #7F1D1D; color: #FFFFFF; font-size: 11px;")
                 del_btn.clicked.connect(lambda _, n=name: self.delete_profile(n))
@@ -522,13 +518,13 @@ class SettingsDialog(QDialog):
         name = self.new_profile_name.text().strip()
         if not name:
             return
-        if name in self.config.data["profiles"]:
+        if name in self.config.data.get("profiles", {}):
             QMessageBox.warning(self, "Exists", "A profile with that name already exists!")
             return
         self.config.data["profiles"][name] = [
-            {"name": "Undo", "icon": "↶", "chord": "ctrl+z", "mode": "tap", "color": "blue"},
-            {"name": "Redo", "icon": "↷", "chord": "ctrl+y", "mode": "tap", "color": "blue"},
-            {"name": "Save", "icon": "💾", "chord": "ctrl+s", "mode": "tap", "color": "emerald"},
+            {"name": "Undo", "chord": "ctrl+z", "mode": "tap", "color": "blue"},
+            {"name": "Redo", "chord": "shift+ctrl+z", "mode": "tap", "color": "blue"},
+            {"name": "Save", "chord": "ctrl+s", "mode": "tap", "color": "emerald"},
         ]
         self.config.save()
         self.new_profile_name.clear()
@@ -536,19 +532,22 @@ class SettingsDialog(QDialog):
         self.profile_combo.addItems(list(self.config.data["profiles"].keys()))
         self.profile_combo.setCurrentText(name)
         self.refresh_profiles_tab()
+        self.sync_yaml_tab_content()
 
     def delete_profile(self, name):
-        if name in self.config.data["profiles"]:
+        if name in self.config.data.get("profiles", {}):
             del self.config.data["profiles"][name]
             if self.config.active_profile_name == name:
-                self.config.active_profile_name = list(self.config.data["profiles"].keys())[0]
+                keys = list(self.config.data["profiles"].keys())
+                self.config.active_profile_name = keys[0] if keys else "Blender 3D"
             self.config.save()
             self.profile_combo.clear()
             self.profile_combo.addItems(list(self.config.data["profiles"].keys()))
             self.profile_combo.setCurrentText(self.config.active_profile_name)
             self.refresh_profiles_tab()
+            self.sync_yaml_tab_content()
 
-    def setup_appearance_tab(self):
+    def setup_layout_gestures_tab(self):
         tab = QWidget()
         layout = QVBoxLayout(tab)
 
@@ -556,15 +555,15 @@ class SettingsDialog(QDialog):
         layout.addWidget(QLabel("Grid Columns:"))
         cols_combo = QComboBox(tab)
         cols_combo.addItems(["1 Column", "2 Columns (Default)", "3 Columns", "4 Columns"])
-        cols_combo.setCurrentIndex(self.config.data.get("columns", 2) - 1)
+        cols_combo.setCurrentIndex(max(0, min(3, self.config.columns - 1)))
         cols_combo.currentIndexChanged.connect(lambda idx: self.set_cols(idx + 1))
         layout.addWidget(cols_combo)
 
         # Button Size
         layout.addWidget(QLabel("Button Size (Touch Comfort):"))
         size_combo = QComboBox(tab)
-        size_combo.addItems(["Compact (46px)", "Standard (54px)", "Large (64px)"])
-        cur_size = self.config.data.get("button_size", "standard")
+        size_combo.addItems(["Compact (46px)", "Standard (52px)", "Large (62px)"])
+        cur_size = self.config.button_size
         size_map = {"compact": 0, "standard": 1, "large": 2}
         size_combo.setCurrentIndex(size_map.get(cur_size, 1))
         size_combo.currentIndexChanged.connect(self.set_btn_size)
@@ -574,49 +573,169 @@ class SettingsDialog(QDialog):
         layout.addWidget(QLabel("Default Opacity (PureRef Style):"))
         opacity_slider = QSlider(Qt.Orientation.Horizontal, tab)
         opacity_slider.setRange(20, 100)
-        opacity_slider.setValue(int(self.config.data.get("opacity", 0.94) * 100))
+        opacity_slider.setValue(int(self.config.opacity * 100))
         opacity_slider.valueChanged.connect(lambda val: self.set_opacity(val / 100.0))
         layout.addWidget(opacity_slider)
 
-        # 4-Finger Gesture Sensitivity
-        layout.addWidget(QLabel("4-Finger Pinch Inward Sensitivity:"))
+        # 4 / 5-Finger Gesture Configuration
+        layout.addSpacing(6)
+        layout.addWidget(QLabel("<b>Multi-Finger Pinch Inward Gesture:</b>"))
+
+        fingers_row = QHBoxLayout()
+        fingers_row.addWidget(QLabel("Fingers:"))
+        self.fingers_combo = QComboBox(tab)
+        self.fingers_combo.addItems(["4 or 5 Fingers (Recommended)", "4 Fingers Only", "5 Fingers Only"])
+        cur_min_f = self.config.data.get("gestures", {}).get("min_fingers", 4)
+        cur_max_f = self.config.data.get("gestures", {}).get("max_fingers", 5)
+        if cur_min_f == 4 and cur_max_f == 5:
+            self.fingers_combo.setCurrentIndex(0)
+        elif cur_min_f == 4 and cur_max_f == 4:
+            self.fingers_combo.setCurrentIndex(1)
+        elif cur_min_f == 5 and cur_max_f == 5:
+            self.fingers_combo.setCurrentIndex(2)
+        self.fingers_combo.currentIndexChanged.connect(self.set_fingers)
+        fingers_row.addWidget(self.fingers_combo, 1)
+        layout.addLayout(fingers_row)
+
+        sens_row = QHBoxLayout()
+        sens_row.addWidget(QLabel("Sensitivity:"))
         sens_combo = QComboBox(tab)
-        sens_combo.addItems(["Low (Harder Pinch)", "Normal (Balanced)", "High (Instant Trigger)"])
-        sens_map = {"low": 0, "normal": 1, "high": 2}
-        cur_sens = self.config.data.get("pinch_sensitivity", "normal")
-        sens_combo.setCurrentIndex(sens_map.get(cur_sens, 1))
+        sens_combo.addItems(["Normal (Balanced)", "High (Instant Trigger)", "Low (Deliberate Pinch)"])
+        sens_map = {"normal": 0, "high": 1, "low": 2}
+        cur_sens = self.config.gesture_sensitivity
+        sens_combo.setCurrentIndex(sens_map.get(cur_sens, 0))
         sens_combo.currentIndexChanged.connect(self.set_sensitivity)
-        layout.addWidget(sens_combo)
+        sens_row.addWidget(sens_combo, 1)
+        layout.addLayout(sens_row)
 
         layout.addSpacing(10)
-        layout.addWidget(QLabel("<b>Keyboard Shortcut to Toggle:</b> <span style='color: #60A5FA'>Super + O</span> (or run <code>yogatouch --toggle</code>)"))
+        layout.addWidget(QLabel("<b>Keyboard Shortcut:</b> <span style='color: #60A5FA'>Super + O</span> (or run <code>yogatouch --toggle</code>)"))
 
         layout.addStretch()
         self.tabs.addTab(tab, "Layout & Gestures")
 
     def set_cols(self, cols):
-        self.config.data["columns"] = cols
-        self.config.save()
+        self.config.columns = cols
         self.main_window.rebuild_buttons()
+        self.sync_yaml_tab_content()
 
     def set_btn_size(self, idx):
         sizes = ["compact", "standard", "large"]
-        self.config.data["button_size"] = sizes[idx]
-        self.config.save()
+        self.config.button_size = sizes[idx]
         self.main_window.rebuild_buttons()
+        self.sync_yaml_tab_content()
 
     def set_opacity(self, val):
-        self.config.data["opacity"] = val
-        self.config.save()
+        self.config.opacity = val
         self.main_window.setWindowOpacity(val)
+        self.sync_yaml_tab_content()
 
-    def set_sensitivity(self, idx):
-        sens = ["low", "normal", "high"]
-        self.config.data["pinch_sensitivity"] = sens[idx]
+    def set_fingers(self, idx):
+        if "gestures" not in self.config.data:
+            self.config.data["gestures"] = {}
+        if idx == 0:
+            self.config.data["gestures"]["min_fingers"] = 4
+            self.config.data["gestures"]["max_fingers"] = 5
+        elif idx == 1:
+            self.config.data["gestures"]["min_fingers"] = 4
+            self.config.data["gestures"]["max_fingers"] = 4
+        elif idx == 2:
+            self.config.data["gestures"]["min_fingers"] = 5
+            self.config.data["gestures"]["max_fingers"] = 5
         self.config.save()
         if self.main_window.gesture_monitor:
-            for _, state in self.main_window.gesture_monitor.devices.values():
-                state.set_sensitivity(sens[idx])
+            self.main_window.gesture_monitor.update_settings(
+                min_fingers=self.config.data["gestures"]["min_fingers"],
+                max_fingers=self.config.data["gestures"]["max_fingers"]
+            )
+        self.sync_yaml_tab_content()
+
+    def set_sensitivity(self, idx):
+        sens_list = ["normal", "high", "low"]
+        sens = sens_list[idx]
+        self.config.gesture_sensitivity = sens
+        if self.main_window.gesture_monitor:
+            self.main_window.gesture_monitor.update_settings(sensitivity=sens)
+        self.sync_yaml_tab_content()
+
+    def setup_yaml_tab(self):
+        tab = QWidget()
+        layout = QVBoxLayout(tab)
+
+        path_lbl = QLabel(f"<b>Config File:</b> <span style='color: #60A5FA'>{CONFIG_FILE}</span>")
+        path_lbl.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+        layout.addWidget(path_lbl)
+
+        btn_row = QHBoxLayout()
+        open_ext_btn = QPushButton("Open in Text Editor", tab)
+        open_ext_btn.clicked.connect(self.open_yaml_externally)
+        btn_row.addWidget(open_ext_btn)
+
+        reload_btn = QPushButton("Reload from Disk", tab)
+        reload_btn.clicked.connect(self.sync_yaml_tab_content)
+        btn_row.addWidget(reload_btn)
+
+        btn_row.addStretch()
+
+        apply_btn = QPushButton("Save & Apply YAML", tab)
+        apply_btn.setStyleSheet("background-color: #059669; font-weight: bold;")
+        apply_btn.clicked.connect(self.save_and_apply_yaml)
+        btn_row.addWidget(apply_btn)
+        layout.addLayout(btn_row)
+
+        self.yaml_editor = QPlainTextEdit(tab)
+        font = QFont("monospace", 10)
+        self.yaml_editor.setFont(font)
+        self.yaml_editor.setStyleSheet("""
+            QPlainTextEdit {
+                background-color: #09090B;
+                color: #E4E4E7;
+                border: 1px solid #27272A;
+                border-radius: 6px;
+                padding: 6px;
+                line-height: 1.3;
+            }
+        """)
+        layout.addWidget(self.yaml_editor, 1)
+
+        self.sync_yaml_tab_content()
+        self.tabs.addTab(tab, "YAML Config")
+
+    def sync_yaml_tab_content(self):
+        if os.path.exists(CONFIG_FILE):
+            try:
+                with open(CONFIG_FILE, "r", encoding="utf-8") as f:
+                    content = f.read()
+                self.yaml_editor.setPlainText(content)
+            except Exception as e:
+                self.yaml_editor.setPlainText(f"# Error reading YAML: {e}")
+
+    def open_yaml_externally(self):
+        try:
+            subprocess.Popen(["xdg-open", CONFIG_FILE])
+        except Exception as e:
+            QMessageBox.warning(self, "Error", f"Could not launch editor: {e}")
+
+    def save_and_apply_yaml(self):
+        raw_text = self.yaml_editor.toPlainText()
+        try:
+            parsed = yaml.safe_load(raw_text)
+            if not isinstance(parsed, dict):
+                raise ValueError("YAML root must be a mapping (dictionary).")
+        except Exception as e:
+            QMessageBox.critical(self, "YAML Syntax Error", f"Failed to parse YAML:\n\n{e}")
+            return
+
+        try:
+            with open(CONFIG_FILE, "w", encoding="utf-8") as f:
+                f.write(raw_text)
+            self.main_window.config.load()
+            self.main_window.apply_config_update()
+            self.refresh_buttons_list()
+            self.refresh_profiles_tab()
+            QMessageBox.information(self, "Applied", "YAML configuration saved and applied successfully!")
+        except Exception as e:
+            QMessageBox.critical(self, "Save Error", f"Failed to save file: {e}")
 
 
 class GestureBridge(QObject):
@@ -631,13 +750,15 @@ class YogaTouchWindow(QMainWindow):
         self.emitter = InputEmitter()
         self.bridge = GestureBridge()
         self.bridge.gesture_triggered.connect(self.toggle_visibility)
-        
+
         self.gesture_monitor = None
         self.buttons = []
+        self._last_mtime = 0
 
         self.setup_window()
         self.setup_ui()
         self.start_gesture_monitor()
+        self.setup_file_watcher()
         self.setup_ipc()
 
     def setup_window(self):
@@ -650,35 +771,34 @@ class YogaTouchWindow(QMainWindow):
         )
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
         self.setAttribute(Qt.WidgetAttribute.WA_AcceptTouchEvents, True)
-        self.setWindowOpacity(self.config.data.get("opacity", 0.94))
+        self.setWindowOpacity(self.config.opacity)
 
-        # Position at top right by default
         self.restore_or_default_position()
 
     def setup_ui(self):
-        # Container frame for rounded border and pure black background
+        # Container frame for rounded border and pure OLED black background
         self.container = QFrame(self)
         self.container.setStyleSheet("""
             QFrame#mainContainer {
                 background-color: #000000;
                 border: 1px solid #27272A;
-                border-radius: 14px;
+                border-radius: 12px;
             }
         """)
         self.container.setObjectName("mainContainer")
 
         # Soft drop shadow (PureRef feel)
         shadow = QGraphicsDropShadowEffect(self)
-        shadow.setBlurRadius(24)
-        shadow.setColor(QColor(0, 0, 0, 160))
-        shadow.setOffset(0, 8)
+        shadow.setBlurRadius(20)
+        shadow.setColor(QColor(0, 0, 0, 180))
+        shadow.setOffset(0, 6)
         self.container.setGraphicsEffect(shadow)
 
         self.setCentralWidget(self.container)
 
         self.main_layout = QVBoxLayout(self.container)
-        self.main_layout.setContentsMargins(0, 0, 0, 8)
-        self.main_layout.setSpacing(8)
+        self.main_layout.setContentsMargins(0, 0, 0, 6)
+        self.main_layout.setSpacing(6)
 
         # Header bar
         self.header = HeaderBar(self)
@@ -687,14 +807,13 @@ class YogaTouchWindow(QMainWindow):
         # Buttons grid container
         self.grid_widget = QWidget(self.container)
         self.grid_layout = QGridLayout(self.grid_widget)
-        self.grid_layout.setContentsMargins(8, 0, 8, 0)
-        self.grid_layout.setSpacing(6)
+        self.grid_layout.setContentsMargins(6, 0, 6, 0)
+        self.grid_layout.setSpacing(5)
         self.main_layout.addWidget(self.grid_widget)
 
         self.rebuild_buttons()
 
     def rebuild_buttons(self):
-        # Clear existing buttons
         while self.grid_layout.count():
             item = self.grid_layout.takeAt(0)
             if item.widget():
@@ -702,10 +821,10 @@ class YogaTouchWindow(QMainWindow):
         self.buttons.clear()
 
         btn_items = self.config.current_buttons
-        cols = self.config.data.get("columns", 2)
-        btn_size = self.config.data.get("button_size", "standard")
-        height_map = {"compact": 46, "standard": 54, "large": 64}
-        btn_height = height_map.get(btn_size, 54)
+        cols = max(1, self.config.columns)
+        btn_size = self.config.button_size
+        height_map = {"compact": 44, "standard": 52, "large": 62}
+        btn_height = height_map.get(btn_size, 52)
 
         for idx, item in enumerate(btn_items):
             btn = TouchExpressButton(item, self.emitter, self.grid_widget)
@@ -715,8 +834,8 @@ class YogaTouchWindow(QMainWindow):
             self.grid_layout.addWidget(btn, r, c)
             self.buttons.append(btn)
 
-        width_per_col = 96 if btn_size == "compact" else 108 if btn_size == "standard" else 120
-        total_width = max(180, (cols * width_per_col) + 20)
+        width_per_col = 92 if btn_size == "compact" else 104 if btn_size == "standard" else 118
+        total_width = max(170, (cols * width_per_col) + 16)
         self.setFixedWidth(total_width)
         self.adjustSize()
 
@@ -754,14 +873,16 @@ class YogaTouchWindow(QMainWindow):
         self.save_current_position()
 
     def restore_or_default_position(self):
-        pos = self.config.data.get("position", {"x": -1, "y": -1})
-        if pos.get("x", -1) != -1 and pos.get("y", -1) != -1 and self.config.data.get("remember_position", True):
+        pos = self.config.data.get("appearance", {}).get("position", {"x": -1, "y": -1})
+        if pos.get("x", -1) != -1 and pos.get("y", -1) != -1 and self.config.data.get("appearance", {}).get("remember_position", True):
             self.move(pos["x"], pos["y"])
         else:
             self.snap_to_corner("top-right")
 
     def save_current_position(self):
-        self.config.data["position"] = {"x": self.x(), "y": self.y()}
+        if "appearance" not in self.config.data:
+            self.config.data["appearance"] = {}
+        self.config.data["appearance"]["position"] = {"x": self.x(), "y": self.y()}
         self.config.save()
 
     def wheelEvent(self, event):
@@ -770,23 +891,23 @@ class YogaTouchWindow(QMainWindow):
         cur_op = self.windowOpacity()
         new_op = max(0.20, min(1.0, cur_op + (0.05 if delta > 0 else -0.05)))
         self.setWindowOpacity(new_op)
-        self.config.data["opacity"] = new_op
-        self.config.save()
+        self.config.opacity = new_op
         event.accept()
 
     def contextMenuEvent(self, event):
         menu = QMenu(self)
         menu.setStyleSheet("""
             QMenu {
-                background-color: #121216;
+                background-color: #0A0A0C;
                 color: #F4F4F5;
                 border: 1px solid #27272A;
                 border-radius: 8px;
                 padding: 4px;
             }
             QMenu::item {
-                padding: 6px 20px;
+                padding: 6px 18px;
                 border-radius: 4px;
+                font-size: 12px;
             }
             QMenu::item:selected {
                 background-color: #2563EB;
@@ -795,36 +916,34 @@ class YogaTouchWindow(QMainWindow):
         """)
 
         # Profiles submenu
-        profile_menu = menu.addMenu("📁 Switch Profile")
-        for p in self.config.data["profiles"].keys():
+        profile_menu = menu.addMenu("Switch Profile")
+        for p in self.config.data.get("profiles", {}).keys():
             action = profile_menu.addAction(p)
-            if p == self.config.active_profile_name:
-                action.setIcon(QIcon.fromTheme("emblem-default"))
             action.triggered.connect(lambda _, name=p: self.switch_profile(name))
 
         menu.addSeparator()
 
-        settings_act = menu.addAction("⚙ Settings & Buttons...")
+        settings_act = menu.addAction("Settings & YAML...")
         settings_act.triggered.connect(self.open_settings)
 
-        snap_menu = menu.addMenu("📍 Snap to Corner")
+        snap_menu = menu.addMenu("Snap to Corner")
         snap_menu.addAction("Top-Right (Default)").triggered.connect(lambda: self.snap_to_corner("top-right"))
         snap_menu.addAction("Top-Left").triggered.connect(lambda: self.snap_to_corner("top-left"))
         snap_menu.addAction("Bottom-Right").triggered.connect(lambda: self.snap_to_corner("bottom-right"))
         snap_menu.addAction("Bottom-Left").triggered.connect(lambda: self.snap_to_corner("bottom-left"))
 
-        op_menu = menu.addMenu("🔍 Opacity")
-        op_menu.addAction("100%").triggered.connect(lambda: self.set_opacity(1.0))
-        op_menu.addAction("80%").triggered.connect(lambda: self.set_opacity(0.80))
-        op_menu.addAction("60%").triggered.connect(lambda: self.set_opacity(0.60))
-        op_menu.addAction("40%").triggered.connect(lambda: self.set_opacity(0.40))
+        op_menu = menu.addMenu("Opacity")
+        op_menu.addAction("100%").triggered.connect(lambda: self.set_opacity_direct(1.0))
+        op_menu.addAction("80%").triggered.connect(lambda: self.set_opacity_direct(0.80))
+        op_menu.addAction("60%").triggered.connect(lambda: self.set_opacity_direct(0.60))
+        op_menu.addAction("40%").triggered.connect(lambda: self.set_opacity_direct(0.40))
 
         menu.addSeparator()
 
-        hide_act = menu.addAction("✕ Hide Overlay (4-Finger Pinch to Reopen)")
+        hide_act = menu.addAction("Hide Overlay (Pinch to Reopen)")
         hide_act.triggered.connect(self.hide)
 
-        quit_act = menu.addAction("🚪 Quit YogaTouch")
+        quit_act = menu.addAction("Quit YogaTouch")
         quit_act.triggered.connect(self.quit_app)
 
         menu.exec(event.globalPos())
@@ -834,10 +953,9 @@ class YogaTouchWindow(QMainWindow):
         self.header.update_profile_title()
         self.rebuild_buttons()
 
-    def set_opacity(self, val):
+    def set_opacity_direct(self, val):
         self.setWindowOpacity(val)
-        self.config.data["opacity"] = val
-        self.config.save()
+        self.config.opacity = val
 
     def toggle_visibility(self):
         if self.isVisible():
@@ -847,14 +965,62 @@ class YogaTouchWindow(QMainWindow):
             self.raise_()
 
     def start_gesture_monitor(self):
-        sens = self.config.data.get("pinch_sensitivity", "normal")
+        g_conf = self.config.data.get("gestures", {})
+        min_f = g_conf.get("min_fingers", 4)
+        max_f = g_conf.get("max_fingers", 5)
+        sens = g_conf.get("sensitivity", "normal")
+        cd = g_conf.get("cooldown_seconds", 0.80)
+
         self.gesture_monitor = GestureMonitor(
             callback=self.bridge.gesture_triggered.emit,
-            sensitivity=sens
+            sensitivity=sens,
+            min_fingers=min_f,
+            max_fingers=max_f,
+            cooldown=cd
         )
         self.gesture_monitor.start()
 
+    def setup_file_watcher(self):
+        """Watches config.yaml and automatically reloads configuration when edited externally."""
+        self.watcher = QFileSystemWatcher(self)
+        if os.path.exists(CONFIG_FILE):
+            self.watcher.addPath(CONFIG_FILE)
+            self._last_mtime = os.path.getmtime(CONFIG_FILE)
+        self.watcher.fileChanged.connect(self.on_file_changed)
+
+    def on_file_changed(self, path):
+        # Debounce multiple file write events
+        QTimer.singleShot(150, self._reload_from_external_edit)
+
+    def _reload_from_external_edit(self):
+        if not os.path.exists(CONFIG_FILE):
+            return
+        mtime = os.path.getmtime(CONFIG_FILE)
+        if mtime != self._last_mtime:
+            self._last_mtime = mtime
+            print("[YogaTouch] Detected external change in config.yaml. Reloading...")
+            self.config.load()
+            self.apply_config_update()
+            # Re-add to watcher if removed by atomic save
+            if CONFIG_FILE not in self.watcher.files():
+                self.watcher.addPath(CONFIG_FILE)
+
+    def apply_config_update(self):
+        """Applies updated config parameters across the UI and gesture monitor."""
+        self.setWindowOpacity(self.config.opacity)
+        self.header.update_profile_title()
+        self.rebuild_buttons()
+        if self.gesture_monitor:
+            g_conf = self.config.data.get("gestures", {})
+            self.gesture_monitor.update_settings(
+                sensitivity=g_conf.get("sensitivity", "normal"),
+                min_fingers=g_conf.get("min_fingers", 4),
+                max_fingers=g_conf.get("max_fingers", 5),
+                cooldown=g_conf.get("cooldown_seconds", 0.80)
+            )
+
     def setup_ipc(self):
+        from PyQt6.QtNetwork import QLocalServer
         self.ipc_server = QLocalServer(self)
         self.ipc_server.removeServer(IPC_SERVER_NAME)
         self.ipc_server.newConnection.connect(self.handle_ipc_connection)
@@ -894,13 +1060,14 @@ class YogaTouchWindow(QMainWindow):
         QApplication.quit()
 
     def closeEvent(self, event):
-        # PureRef style: close hides to background instead of destroying daemon
+        # PureRef style: close hides overlay instead of terminating daemon
         self.hide()
         event.ignore()
 
 
 def send_ipc_command(cmd):
     """Sends a command to an already running YogaTouch process."""
+    from PyQt6.QtNetwork import QLocalSocket
     socket = QLocalSocket()
     socket.connectToServer(IPC_SERVER_NAME)
     if socket.waitForConnected(600):
@@ -915,7 +1082,6 @@ def send_ipc_command(cmd):
 
 
 def main():
-    # CLI command parsing
     if len(sys.argv) > 1:
         arg = sys.argv[1].lower()
         if arg in ["--toggle", "-t", "toggle"]:

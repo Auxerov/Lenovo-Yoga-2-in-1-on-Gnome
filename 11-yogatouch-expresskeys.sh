@@ -8,9 +8,10 @@
 # - Installs and configures YogaTouch: PureRef-style Floating ExpressKeys &
 #   Multi-Touch Gesture Suite for Lenovo Yoga 7 2-in-1.
 # - Key Features:
-#   1. 4-Finger Pinch-Inward Gesture ("4 parmakla ortaya çekme"):
-#      * Detects 4-finger pinch-in on touchscreen (Wacom Finger /dev/input/event7)
-#        and touchpad (ELAN Touchpad /dev/input/event5) to smoothly toggle overlay.
+#   1. 4-and-5-Finger Pinch-Inward Gesture ("4-5 parmakla ortaya çekme / büzme"):
+#      * High-accuracy detection of 4-to-5 finger contraction gestures on touchscreen
+#        (Wacom Finger /dev/input/event7) and touchpad (ELAN Touchpad /dev/input/event5)
+#        with live contraction & lift-off evaluation to seamlessly toggle overlay.
 #   2. PureRef-Style Floating Window:
 #      * Always on Top (_NET_WM_STATE_ABOVE / WindowStaysOnTopHint).
 #      * Non-focus-stealing (WindowDoesNotAcceptFocus & NoFocus buttons).
@@ -18,11 +19,12 @@
 #      * Mouse wheel opacity adjustment (20% to 100%).
 #      * Draggable anywhere, defaults and snaps to Top-Right corner.
 #   3. Direct Kernel UInput Keystroke & Modifier Emitter:
-#      * Momentary Hold and Toggle Latch modes for Shift, Ctrl, Alt, Space, MMB Orbit.
+#      * Momentary Hold and Toggle Latch modes for Shift, Ctrl, Alt, Space, etc.
 #      * Instant Tap execution for Undo (Ctrl+Z), Redo, Brush, Eraser, etc.
-#   4. Customizable Profiles & Settings (Blender, Affinity, Krita, Foliate, General):
-#      * Dedicated GUI settings modal to add/edit/delete buttons, change keybinds,
-#        adjust column count, button sizes, and gesture sensitivity.
+#   4. YAML-Based Customization (~/.config/yogatouch/config.yaml):
+#      * Fully customizable via human-readable YAML config with live auto-reload.
+#      * In-app GUI settings modal with integrated YAML editor & validator.
+#      * Clean typography with zero emojis and no Pan/Orbit buttons.
 #   5. Autostart & Fallback Hotkey:
 #      * Registered systemd user service (yogatouch.service).
 #      * Registered GNOME custom shortcut: Super+O to toggle.
@@ -46,13 +48,13 @@ ICON_DIR="${HOME}/.local/share/icons/hicolor/scalable/apps"
 SYSTEMD_USER_DIR="${HOME}/.config/systemd/user"
 
 echo -e "${BLUE}==============================================================================${NC}"
-echo -e "${BLUE}       YogaTouch: Floating ExpressKeys & 4-Finger Gesture Suite              ${NC}"
+echo -e "${BLUE}       YogaTouch: Floating ExpressKeys & 4-to-5 Finger Gesture Suite          ${NC}"
 echo -e "${BLUE}                        Author: Auxerov                                       ${NC}"
 echo -e "${BLUE}==============================================================================${NC}"
 echo ""
 
 # 1. Dependency Check
-echo -e "${YELLOW}[1/5] Checking dependencies (Python3, evdev, PyQt6)...${NC}"
+echo -e "${YELLOW}[1/5] Checking dependencies (Python3, evdev, PyQt6, PyYAML)...${NC}"
 MISSING_PKGS=()
 if ! python3 -c "import evdev" &>/dev/null; then
     MISSING_PKGS+=("python3-evdev")
@@ -60,12 +62,15 @@ fi
 if ! python3 -c "from PyQt6.QtWidgets import QApplication" &>/dev/null; then
     MISSING_PKGS+=("python3-pyqt6")
 fi
+if ! python3 -c "import yaml" &>/dev/null; then
+    MISSING_PKGS+=("python3-pyyaml")
+fi
 
 if [ ${#MISSING_PKGS[@]} -gt 0 ]; then
     echo -e "${YELLOW}  Installing missing packages: ${MISSING_PKGS[*]}...${NC}"
     sudo dnf install -y "${MISSING_PKGS[@]}"
 else
-    echo -e "${GREEN}  ✓ Python dependencies (evdev, PyQt6) are installed.${NC}"
+    echo -e "${GREEN}  ✓ Python dependencies (evdev, PyQt6, PyYAML) are installed.${NC}"
 fi
 
 # Ensure user is in input group
@@ -126,7 +131,7 @@ echo ""
 echo -e "${YELLOW}[4/5] Setting up systemd user service...${NC}"
 cat << EOF > "${SYSTEMD_USER_DIR}/yogatouch.service"
 [Unit]
-Description=YogaTouch Floating ExpressKeys & 4-Finger Gesture Monitor
+Description=YogaTouch Floating ExpressKeys & Multi-Touch Gesture Monitor
 After=graphical-session.target
 
 [Service]
@@ -152,18 +157,19 @@ echo -e "${GREEN}  SUCCESS: YogaTouch ExpressKeys Installed and Running!        
 echo -e "${GREEN}==============================================================================${NC}"
 echo ""
 echo -e "How to use YogaTouch:"
-echo -e " 1. 🖐️ 4-Finger Pinch Inward Gesture ('ortaya çekme'):"
-echo -e "    - Touch 4 fingers on the screen or touchpad and pull them inward."
+echo -e " 1. 4-to-5 Finger Pinch Inward Gesture ('ortaya çekme / büzme'):"
+echo -e "    - Touch 4 or 5 fingers on the screen or touchpad and pull them inward."
 echo -e "    - The floating express dock smoothly toggles (appears/disappears)!"
-echo -e " 2. ⌨️ Keyboard Shortcut:"
+echo -e " 2. Keyboard Shortcut:"
 echo -e "    - Press Super + O to toggle at any time."
-echo -e " 3. 🎨 Non-Focus-Stealing Touch Dock:"
+echo -e " 3. Non-Focus-Stealing Touch Dock:"
 echo -e "    - Floats in the top-right corner over Blender, Affinity, Krita, etc."
 echo -e "    - Tap or hold buttons with your left hand while drawing with stylus in your right hand!"
 echo -e "    - Never steals window focus or interrupts brush strokes."
-echo -e " 4. ⚙️ Settings & Customization:"
-echo -e "    - Click the '⚙' gear icon or right-click to add buttons, edit key combinations,"
-echo -e "      change profiles (Blender, Affinity, Krita, Foliate), or tweak opacity."
-echo -e " 5. 🔍 PureRef Opacity:"
+echo -e " 4. YAML Configuration & Customization:"
+echo -e "    - Config file: ~/.config/yogatouch/config.yaml"
+echo -e "    - Click 'CFG' or right-click to open Settings & YAML Editor."
+echo -e "    - Fully customizable profiles, key combinations, and live auto-reload."
+echo -e " 5. PureRef Opacity:"
 echo -e "    - Scroll your mouse wheel over the dock to adjust transparency (20% to 100%)."
 echo ""
