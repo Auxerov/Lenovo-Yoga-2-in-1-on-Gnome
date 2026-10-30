@@ -221,9 +221,14 @@ if [ -n "$BLENDER_EXEC" ]; then
     for cfg in "$HOME/.config/blender"/*/config; do
         if [ -d "$cfg" ]; then
             inject_keymaps "$BLENDER_EXEC" "$cfg"
+            # Ensure stylus pan sensitivity is set to 1.75 in vimender_config.json
+            VIM_CFG="$cfg/vimender_config.json"
+            if [ -f "$VIM_CFG" ]; then
+                python3 -c "import json; p='$VIM_CFG'; d=json.load(open(p)); d['stylus_pan_sensitivity']=1.75; json.dump(d,open(p,'w'),indent=2)" 2>/dev/null || true
+            fi
         fi
     done
-    echo -e "${GREEN}✓ Keymaps verified for all local Blender versions.${NC}"
+    echo -e "${GREEN}✓ Keymaps & Stylus settings verified for all local Blender versions.${NC}"
 else
     echo -e "${YELLOW}Notice: No Blender binary detected to execute keymap injection.${NC}"
 fi
@@ -291,7 +296,7 @@ echo -e "  ${BOLD}2. Native Wayland Fractional Scaling:${NC} 1.25x HiDPI crisp r
 echo -e "  ${BOLD}3. Evdev Multi-Touch & Stylus Access:${NC} User added to input group, udev rules applied."
 echo -e "  ${BOLD}4. Stylus Viewport Navigation:${NC}"
 echo -e "     - ${CYAN}Lower Button (Hold & Drag):${NC} Rotate / Orbit 3D Scene"
-echo -e "     - ${CYAN}Upper Button (Hold & Drag):${NC} Pan 3D Viewport (Shift + Middle Click)"
+echo -e "     - ${CYAN}Upper Button (Hold & Drag):${NC} Pan 3D Viewport (Shift + Middle Click / 1.75x Sensitivity)"
 echo -e "  ${BOLD}5. Vimender Addon Modes:${NC}"
 echo -e "     - ${CYAN}AltGr + Space:${NC} Mode Search Popup"
 echo -e "     - ${CYAN}Ctrl + Alt + P:${NC} Pen Mode (White theme, instant isolated 2-finger pinch-zoom)"
