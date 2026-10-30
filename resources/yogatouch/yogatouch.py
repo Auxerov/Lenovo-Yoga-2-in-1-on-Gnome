@@ -152,9 +152,10 @@ class HeaderBar(QFrame):
         layout.setContentsMargins(8, 0, 8, 0)
         layout.setSpacing(6)
 
-        # Profile Pill Button
+        # Profile Pill Button (Click to open list dropdown, scroll wheel to quick cycle)
         self.profile_btn = QPushButton(self)
         self.profile_btn.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        self.profile_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.profile_btn.setStyleSheet("""
             QPushButton {
                 background-color: #121215;
@@ -164,15 +165,20 @@ class HeaderBar(QFrame):
                 font-size: 10px;
                 font-weight: 700;
                 letter-spacing: 0.5px;
-                padding: 2px 8px;
+                padding: 2px 10px;
             }
             QPushButton:hover {
-                background-color: #27272A;
+                background-color: #1E293B;
                 border-color: #3B82F6;
                 color: #FFFFFF;
             }
+            QPushButton:pressed {
+                background-color: #2563EB;
+                color: #FFFFFF;
+            }
         """)
-        self.profile_btn.clicked.connect(self.main_window.cycle_profile)
+        self.profile_btn.clicked.connect(self.show_profile_menu)
+        self.profile_btn.wheelEvent = self.on_profile_btn_wheel
         layout.addWidget(self.profile_btn)
 
         # Subtle drag handle in center
@@ -227,7 +233,75 @@ class HeaderBar(QFrame):
 
     def update_profile_title(self):
         current = self.main_window.config.active_profile_name
-        self.profile_btn.setText(current.upper())
+        self.profile_btn.setText(f"{current.upper()}  ▾")
+
+    def show_profile_menu(self):
+        menu = QMenu(self)
+        menu.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        menu.setStyleSheet("""
+            QMenu {
+                background-color: #0A0A0C;
+                color: #F4F4F5;
+                border: 1px solid #27272A;
+                border-radius: 8px;
+                padding: 4px;
+            }
+            QMenu::item {
+                padding: 7px 16px 7px 10px;
+                border-radius: 5px;
+                font-size: 11px;
+                font-weight: 600;
+                letter-spacing: 0.4px;
+                margin: 1px 0px;
+            }
+            QMenu::item:selected {
+                background-color: #2563EB;
+                color: #FFFFFF;
+            }
+            QMenu::separator {
+                height: 1px;
+                background-color: #27272A;
+                margin: 4px 6px;
+            }
+        """)
+
+        current_prof = self.main_window.config.active_profile_name
+        profiles = list(self.main_window.config.data.get("profiles", {}).keys())
+
+        for prof in profiles:
+            btn_count = len(self.main_window.config.data.get("profiles", {}).get(prof, []))
+            is_active = (prof == current_prof)
+            prefix = "●  " if is_active else "    "
+            action = menu.addAction(f"{prefix}{prof.upper()}  ({btn_count})")
+            if is_active:
+                f = action.font()
+                f.setBold(True)
+                action.setFont(f)
+            action.triggered.connect(lambda _, p=prof: self.main_window.switch_profile(p))
+
+        menu.addSeparator()
+        add_act = menu.addAction("+  NEW PROFILE...")
+        add_act.triggered.connect(self.main_window.open_new_profile_dialog)
+
+        manage_act = menu.addAction("MANAGE PROFILES...")
+        manage_act.triggered.connect(self.main_window.open_settings_profiles)
+
+        btn_pos = self.profile_btn.mapToGlobal(QPoint(0, self.profile_btn.height() + 2))
+        menu.exec(btn_pos)
+
+    def on_profile_btn_wheel(self, event):
+        delta = event.angleDelta().y()
+        keys = list(self.main_window.config.data.get("profiles", {}).keys())
+        if not keys:
+            return
+        cur = self.main_window.config.active_profile_name
+        idx = keys.index(cur) if cur in keys else 0
+        if delta > 0:
+            next_idx = (idx - 1) % len(keys)
+        else:
+            next_idx = (idx + 1) % len(keys)
+        self.main_window.switch_profile(keys[next_idx])
+        event.accept()
 
     def mousePressEvent(self, event):
         if event.button() == Qt.MouseButton.LeftButton:
@@ -848,6 +922,29 @@ class YogaTouchWindow(QMainWindow):
         dlg = SettingsDialog(self)
         dlg.exec()
 
+    def open_settings_profiles(self):
+        dlg = SettingsDialog(self)
+        dlg.tabs.setCurrentIndex(1)
+        dlg.exec()
+
+    def open_new_profile_dialog(self):
+        from PyQt6.QtWidgets import QInputDialog
+        name, ok = QInputDialog.getText(self, "New Profile", "Enter software profile name:")
+        if ok and name.strip():
+            name = name.strip()
+            if name in self.config.data.get("profiles", {}):
+                QMessageBox.warning(self, "Exists", "A profile with that name already exists!")
+                return
+            self.config.data.setdefault("profiles", {})[name] = [
+                {"name": "Undo", "chord": "ctrl+z", "mode": "tap", "color": "blue"},
+                {"name": "Redo", "chord": "shift+ctrl+z", "mode": "tap", "color": "blue"},
+                {"name": "Save", "chord": "ctrl+s", "mode": "tap", "color": "emerald"},
+            ]
+            self.config.active_profile_name = name
+            self.config.save()
+            self.header.update_profile_title()
+            self.rebuild_buttons()
+
     def snap_to_corner(self, corner="top-right"):
         screen = QApplication.primaryScreen().availableGeometry()
         w, h = self.width(), self.height()
@@ -917,8 +1014,15 @@ class YogaTouchWindow(QMainWindow):
 
         # Profiles submenu
         profile_menu = menu.addMenu("Switch Profile")
+        current_prof = self.config.active_profile_name
         for p in self.config.data.get("profiles", {}).keys():
-            action = profile_menu.addAction(p)
+            prefix = "●  " if p == current_prof else "    "
+            btn_count = len(self.config.data.get("profiles", {}).get(p, []))
+            action = profile_menu.addAction(f"{prefix}{p.upper()}  ({btn_count})")
+            if p == current_prof:
+                f = action.font()
+                f.setBold(True)
+                action.setFont(f)
             action.triggered.connect(lambda _, name=p: self.switch_profile(name))
 
         menu.addSeparator()
