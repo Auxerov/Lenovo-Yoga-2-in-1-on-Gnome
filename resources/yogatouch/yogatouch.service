@@ -1,0 +1,13 @@
+[Unit]
+Description=YogaTouch Floating ExpressKeys & 4-Finger Gesture Monitor
+After=graphical-session.target
+
+[Service]
+Type=simple
+ExecStart=/home/auxerov/.local/bin/yogatouch
+Restart=on-failure
+RestartSec=3s
+Environment=QT_QPA_PLATFORM=xcb
+
+[Install]
+WantedBy=graphical-session.target

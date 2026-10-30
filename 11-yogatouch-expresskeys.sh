@@ -1,0 +1,169 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# Lenovo Yoga 7 2-in-1 Linux Configuration Suite
+# Author: Auxerov
+# File: 11-yogatouch-expresskeys.sh
+# 
+# Functionality:
+# - Installs and configures YogaTouch: PureRef-style Floating ExpressKeys &
+#   Multi-Touch Gesture Suite for Lenovo Yoga 7 2-in-1.
+# - Key Features:
+#   1. 4-Finger Pinch-Inward Gesture ("4 parmakla ortaya çekme"):
+#      * Detects 4-finger pinch-in on touchscreen (Wacom Finger /dev/input/event7)
+#        and touchpad (ELAN Touchpad /dev/input/event5) to smoothly toggle overlay.
+#   2. PureRef-Style Floating Window:
+#      * Always on Top (_NET_WM_STATE_ABOVE / WindowStaysOnTopHint).
+#      * Non-focus-stealing (WindowDoesNotAcceptFocus & NoFocus buttons).
+#      * Allows simultaneous stylus/mouse drawing while left finger taps touch buttons!
+#      * Mouse wheel opacity adjustment (20% to 100%).
+#      * Draggable anywhere, defaults and snaps to Top-Right corner.
+#   3. Direct Kernel UInput Keystroke & Modifier Emitter:
+#      * Momentary Hold and Toggle Latch modes for Shift, Ctrl, Alt, Space, MMB Orbit.
+#      * Instant Tap execution for Undo (Ctrl+Z), Redo, Brush, Eraser, etc.
+#   4. Customizable Profiles & Settings (Blender, Affinity, Krita, Foliate, General):
+#      * Dedicated GUI settings modal to add/edit/delete buttons, change keybinds,
+#        adjust column count, button sizes, and gesture sensitivity.
+#   5. Autostart & Fallback Hotkey:
+#      * Registered systemd user service (yogatouch.service).
+#      * Registered GNOME custom shortcut: Super+O to toggle.
+# ==============================================================================
+
+set -e
+
+# ANSI Colors
+GREEN='\033[0;32m'
+BLUE='\033[0;34m'
+YELLOW='\033[1;33m'
+RED='\033[0;31m'
+NC='\033[0m'
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+RESOURCES_DIR="${SCRIPT_DIR}/resources/yogatouch"
+APP_DIR="${HOME}/.local/share/yogatouch"
+BIN_DIR="${HOME}/.local/bin"
+DESKTOP_DIR="${HOME}/.local/share/applications"
+ICON_DIR="${HOME}/.local/share/icons/hicolor/scalable/apps"
+SYSTEMD_USER_DIR="${HOME}/.config/systemd/user"
+
+echo -e "${BLUE}==============================================================================${NC}"
+echo -e "${BLUE}       YogaTouch: Floating ExpressKeys & 4-Finger Gesture Suite              ${NC}"
+echo -e "${BLUE}                        Author: Auxerov                                       ${NC}"
+echo -e "${BLUE}==============================================================================${NC}"
+echo ""
+
+# 1. Dependency Check
+echo -e "${YELLOW}[1/5] Checking dependencies (Python3, evdev, PyQt6)...${NC}"
+MISSING_PKGS=()
+if ! python3 -c "import evdev" &>/dev/null; then
+    MISSING_PKGS+=("python3-evdev")
+fi
+if ! python3 -c "from PyQt6.QtWidgets import QApplication" &>/dev/null; then
+    MISSING_PKGS+=("python3-pyqt6")
+fi
+
+if [ ${#MISSING_PKGS[@]} -gt 0 ]; then
+    echo -e "${YELLOW}  Installing missing packages: ${MISSING_PKGS[*]}...${NC}"
+    sudo dnf install -y "${MISSING_PKGS[@]}"
+else
+    echo -e "${GREEN}  ✓ Python dependencies (evdev, PyQt6) are installed.${NC}"
+fi
+
+# Ensure user is in input group
+if ! groups "$USER" | grep -q "\binput\b"; then
+    echo -e "${YELLOW}  Adding $USER to 'input' group for /dev/input access...${NC}"
+    sudo usermod -aG input "$USER"
+fi
+
+# 2. Deploy Application Files
+echo ""
+echo -e "${YELLOW}[2/5] Deploying YogaTouch files...${NC}"
+mkdir -p "${APP_DIR}" "${BIN_DIR}" "${DESKTOP_DIR}" "${ICON_DIR}" "${SYSTEMD_USER_DIR}"
+
+cp -rf "${RESOURCES_DIR}"/* "${APP_DIR}/" 2>/dev/null || true
+rm -rf "${APP_DIR}/__pycache__"
+
+# Create / update wrapper in ~/.local/bin/yogatouch
+cat << 'EOF' > "${BIN_DIR}/yogatouch"
+#!/usr/bin/env bash
+exec python3 /home/auxerov/.local/share/yogatouch/yogatouch.py "$@"
+EOF
+chmod +x "${BIN_DIR}/yogatouch"
+echo -e "${GREEN}  ✓ Installed CLI wrapper to ${BIN_DIR}/yogatouch${NC}"
+
+# Deploy Icon & Desktop Entry
+if [ -f "${RESOURCES_DIR}/yogatouch.svg" ]; then
+    cp -f "${RESOURCES_DIR}/yogatouch.svg" "${ICON_DIR}/"
+fi
+if [ -f "${RESOURCES_DIR}/yogatouch.desktop" ]; then
+    cp -f "${RESOURCES_DIR}/yogatouch.desktop" "${DESKTOP_DIR}/"
+    update-desktop-database "${DESKTOP_DIR}" 2>/dev/null || true
+fi
+echo -e "${GREEN}  ✓ Installed desktop entry & vector icon${NC}"
+
+# 3. Configure GNOME Keyboard Shortcut (Super+O)
+echo ""
+echo -e "${YELLOW}[3/5] Configuring GNOME shortcut (Super+O)...${NC}"
+python3 -c "
+import subprocess
+try:
+    out = subprocess.check_output(['gsettings', 'get', 'org.gnome.settings-daemon.plugins.media-keys', 'custom-keybindings']).decode().strip()
+    bindings = eval(out) if out.startswith('[') else []
+    path = '/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom5/'
+    if path not in bindings:
+        bindings.append(path)
+        subprocess.check_call(['gsettings', 'set', 'org.gnome.settings-daemon.plugins.media-keys', 'custom-keybindings', str(bindings)])
+    schema = f'org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:{path}'
+    subprocess.check_call(['gsettings', 'set', schema, 'name', 'YogaTouch ExpressKeys'])
+    subprocess.check_call(['gsettings', 'set', schema, 'command', '${BIN_DIR}/yogatouch --toggle'])
+    subprocess.check_call(['gsettings', 'set', schema, 'binding', '<Super>o'])
+    print('  ✓ Registered Super+O keyboard shortcut.')
+except Exception as e:
+    print('  ! Note setting shortcut:', e)
+"
+
+# 4. Configure Systemd User Service
+echo ""
+echo -e "${YELLOW}[4/5] Setting up systemd user service...${NC}"
+cat << EOF > "${SYSTEMD_USER_DIR}/yogatouch.service"
+[Unit]
+Description=YogaTouch Floating ExpressKeys & 4-Finger Gesture Monitor
+After=graphical-session.target
+
+[Service]
+Type=simple
+ExecStart=${BIN_DIR}/yogatouch
+Restart=on-failure
+RestartSec=3s
+Environment=QT_QPA_PLATFORM=xcb
+
+[Install]
+WantedBy=graphical-session.target
+EOF
+
+systemctl --user daemon-reload
+systemctl --user enable yogatouch.service
+systemctl --user restart yogatouch.service
+echo -e "${GREEN}  ✓ YogaTouch service enabled and started in background.${NC}"
+
+# 5. Summary & Verification
+echo ""
+echo -e "${GREEN}==============================================================================${NC}"
+echo -e "${GREEN}  SUCCESS: YogaTouch ExpressKeys Installed and Running!                      ${NC}"
+echo -e "${GREEN}==============================================================================${NC}"
+echo ""
+echo -e "How to use YogaTouch:"
+echo -e " 1. 🖐️ 4-Finger Pinch Inward Gesture ('ortaya çekme'):"
+echo -e "    - Touch 4 fingers on the screen or touchpad and pull them inward."
+echo -e "    - The floating express dock smoothly toggles (appears/disappears)!"
+echo -e " 2. ⌨️ Keyboard Shortcut:"
+echo -e "    - Press Super + O to toggle at any time."
+echo -e " 3. 🎨 Non-Focus-Stealing Touch Dock:"
+echo -e "    - Floats in the top-right corner over Blender, Affinity, Krita, etc."
+echo -e "    - Tap or hold buttons with your left hand while drawing with stylus in your right hand!"
+echo -e "    - Never steals window focus or interrupts brush strokes."
+echo -e " 4. ⚙️ Settings & Customization:"
+echo -e "    - Click the '⚙' gear icon or right-click to add buttons, edit key combinations,"
+echo -e "      change profiles (Blender, Affinity, Krita, Foliate), or tweak opacity."
+echo -e " 5. 🔍 PureRef Opacity:"
+echo -e "    - Scroll your mouse wheel over the dock to adjust transparency (20% to 100%)."
+echo ""

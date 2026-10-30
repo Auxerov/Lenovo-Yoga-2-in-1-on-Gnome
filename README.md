@@ -38,11 +38,18 @@ cd ~/Documents/"Lenovo 2 in 1 Settings"
 | **`08-librewolf-dpi-discord.sh`** | **Discord & Censorship DPI Bypass:** Sets clean Cloudflare/Google DNS, enables Cloudflare DNS-over-HTTPS (DoH), and runs a lightweight local SpoofDPI proxy service (`127.0.0.1:8080`) with selective PAC routing. Discord connects seamlessly with packet fragmentation bypassing ISP inspection, while all other sites connect 100% directly with zero speed loss and zero VPN latency. |
 | **`09-foliate-vertical-matte-black.sh`** | **Foliate Continuous Vertical Reading, Matte Black, Shelf System & Native PDF Support:** Enables continuous vertical scrolling (webtoon / document mode), installs a soothing matte black background theme (`#121212` / `#e0e0e0` text) to eliminate glare, patches the Foliate paginator so scrolling or swiping past chapter boundaries seamlessly advances to adjacent sections, adds a full shelf/collection management system in the library sidebar, introduces right-click "Mark as Read" (100% progress) / "Add to Shelf…" actions, and enables native PDF document reading with GTK file chooser filters, cover thumbnail generation, and desktop MIME association. |
 | **`10-appflowy-oled-black-theme.sh`** | **AppFlowy True Pure Black OLED Themes:** Installs and packages true `#000000` pitch black OLED themes for AppFlowy (`OLED Black` with Catppuccin soft blue accent, and `OLED Monochrome` with crisp minimalist white accent). Deploys valid `.flowy_plugin` packages with all 55 FlowyColorScheme color tokens to AppFlowy's document discovery and sandbox folders, and configures the default theme in the application database. |
-| **`resources/`** | Contains the HID-BPF C source code (`lenovo_pen_fix.bpf.c`), precompiled object (`lenovo_pen_fix.bpf.o`), Foliate enhanced assets (`app.js`, `pdf.js`, `paginator.js`, `library.js`, `reader.js`, `matte-black.json`, etc.), and AppFlowy OLED theme plugin bundles (`OLED_Black.flowy_plugin`, `OLED_Monochrome.flowy_plugin`). |
+| **`11-yogatouch-expresskeys.sh`** | **YogaTouch Floating ExpressKeys & 4-Finger Gesture Suite:** PureRef-style always-on-top floating touch express dock tailored for 2-in-1 touchscreen artists and creators. Activated smoothly by 4-finger pinch-inward ("ortaya çekme") gesture on touchscreen or touchpad (or `Super+O`). Floats in the top-right corner over Blender, Affinity, Krita, and notes without stealing focus, permitting simultaneous stylus drawing and left-finger modifier taps (Shift, Ctrl, Alt, Space, MMB Orbit, Undo, Brush, etc.). Includes full in-app customization GUI, mouse wheel opacity control, and profile management. |
+| **`resources/`** | Contains the HID-BPF C source code (`lenovo_pen_fix.bpf.c`), precompiled object (`lenovo_pen_fix.bpf.o`), Foliate enhanced assets (`app.js`, `pdf.js`, `paginator.js`, `library.js`, `reader.js`, `matte-black.json`, etc.), AppFlowy OLED theme plugin bundles, and complete YogaTouch ExpressKeys source code. |
 
 ---
 
 ## 🛠️ Standalone Commands
+- **YogaTouch ExpressKeys Control:**
+  - `yogatouch --toggle` : Toggles the floating touch dock (or use 4-finger pinch inward or `Super+O`).
+  - `yogatouch --show`   : Displays and raises the touch dock.
+  - `yogatouch --hide`   : Hides the touch dock.
+  - `yogatouch --status` : Checks if the background daemon is running.
+  - `systemctl --user restart yogatouch.service` : Restarts the background gesture monitor service.
 - **Battery Conservation Control:**
   - `bat-limit on`     : Caps charging at ~80% (ideal for daily AC power use).
   - `bat-limit off`    : Charges up to 100% (ideal before traveling).

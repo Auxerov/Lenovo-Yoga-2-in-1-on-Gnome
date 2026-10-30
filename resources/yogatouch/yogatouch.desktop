@@ -1,0 +1,10 @@
+[Desktop Entry]
+Name=YogaTouch ExpressKeys
+Comment=PureRef-style floating express dock with 4-finger pinch gesture for 2-in-1 Linux
+Exec=/home/auxerov/.local/bin/yogatouch
+Icon=yogatouch
+Terminal=false
+Type=Application
+Categories=Utility;Graphics;Settings;
+StartupNotify=false
+Keywords=gesture;touch;stylus;blender;affinity;expresskeys;pureref;

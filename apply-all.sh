@@ -46,6 +46,7 @@ SCRIPTS=(
     "08-librewolf-dpi-discord.sh"
     "09-foliate-vertical-matte-black.sh"
     "10-appflowy-oled-black-theme.sh"
+    "11-yogatouch-expresskeys.sh"
 )
 
 TOTAL=${#SCRIPTS[@]}
@@ -85,4 +86,5 @@ echo -e " 7. [Blender 3D] Enabled Radeon 780M native HIP compute and stylus 3D v
 echo -e " 8. [DPI / Discord] Configured zero-slowdown selective DPI bypass (SpoofDPI + DoH) in LibreWolf."
 echo -e " 9. [Foliate E-Reader] Configured continuous vertical scrolling, true matte black theme, auto-chapter advance, shelf system, and right-click mark as read."
 echo -e " 10. [AppFlowy] Installed True Pure Black OLED themes (OLED Black & OLED Monochrome) for optimal battery & display contrast."
+echo -e " 11. [YogaTouch ExpressKeys] Installed PureRef-style always-on-top touch dock with 4-finger pinch-inward gesture activation."
 echo ""
