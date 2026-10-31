@@ -2,6 +2,7 @@
 # ==============================================================================
 # YogaTouch - Configuration & Profile Manager (YAML-based)
 # Author: Auxerov
+# Matte Black & Monochrome Edition (Zero Blue Light)
 # ==============================================================================
 
 import os
@@ -14,8 +15,8 @@ LEGACY_JSON_FILE = os.path.join(CONFIG_DIR, "config.json")
 
 DEFAULT_PROFILES = {
     "Blender 3D": [
-        {"name": "Undo", "chord": "ctrl+z", "mode": "tap", "color": "blue"},
-        {"name": "Redo", "chord": "shift+ctrl+z", "mode": "tap", "color": "blue"},
+        {"name": "Undo", "chord": "ctrl+z", "mode": "tap", "color": "highlight"},
+        {"name": "Redo", "chord": "shift+ctrl+z", "mode": "tap", "color": "highlight"},
         {"name": "Shift", "chord": "shift", "mode": "hold", "color": "zinc"},
         {"name": "Ctrl", "chord": "ctrl", "mode": "hold", "color": "zinc"},
         {"name": "Alt", "chord": "alt", "mode": "hold", "color": "zinc"},
@@ -25,51 +26,51 @@ DEFAULT_PROFILES = {
         {"name": "Right 3", "chord": "num3", "mode": "tap", "color": "zinc"},
         {"name": "Camera 0", "chord": "num0", "mode": "tap", "color": "zinc"},
         {"name": "Focus .", "chord": "kpdot", "mode": "tap", "color": "zinc"},
-        {"name": "Save", "chord": "ctrl+s", "mode": "tap", "color": "emerald"},
+        {"name": "Save", "chord": "ctrl+s", "mode": "tap", "color": "accent"},
     ],
     "Affinity / 2D Art": [
-        {"name": "Undo", "chord": "ctrl+z", "mode": "tap", "color": "blue"},
-        {"name": "Redo", "chord": "shift+ctrl+z", "mode": "tap", "color": "blue"},
-        {"name": "Brush", "chord": "b", "mode": "tap", "color": "purple"},
-        {"name": "Eraser", "chord": "e", "mode": "tap", "color": "purple"},
-        {"name": "Picker", "chord": "alt", "mode": "hold", "color": "emerald"},
-        {"name": "Hand", "chord": "space", "mode": "hold", "color": "emerald"},
+        {"name": "Undo", "chord": "ctrl+z", "mode": "tap", "color": "highlight"},
+        {"name": "Redo", "chord": "shift+ctrl+z", "mode": "tap", "color": "highlight"},
+        {"name": "Brush", "chord": "b", "mode": "tap", "color": "zinc"},
+        {"name": "Eraser", "chord": "e", "mode": "tap", "color": "zinc"},
+        {"name": "Picker", "chord": "alt", "mode": "hold", "color": "accent"},
+        {"name": "Hand", "chord": "space", "mode": "hold", "color": "accent"},
         {"name": "Shift", "chord": "shift", "mode": "hold", "color": "zinc"},
         {"name": "Ctrl", "chord": "ctrl", "mode": "hold", "color": "zinc"},
         {"name": "Zoom In", "chord": "ctrl+equal", "mode": "tap", "color": "zinc"},
         {"name": "Zoom Out", "chord": "ctrl+minus", "mode": "tap", "color": "zinc"},
         {"name": "Fit 100%", "chord": "ctrl+0", "mode": "tap", "color": "zinc"},
-        {"name": "Save", "chord": "ctrl+s", "mode": "tap", "color": "emerald"},
+        {"name": "Save", "chord": "ctrl+s", "mode": "tap", "color": "accent"},
     ],
     "Krita": [
-        {"name": "Undo", "chord": "ctrl+z", "mode": "tap", "color": "blue"},
-        {"name": "Redo", "chord": "shift+ctrl+z", "mode": "tap", "color": "blue"},
-        {"name": "Brush", "chord": "b", "mode": "tap", "color": "purple"},
-        {"name": "Eraser", "chord": "e", "mode": "tap", "color": "purple"},
-        {"name": "Color", "chord": "ctrl", "mode": "hold", "color": "emerald"},
-        {"name": "Hand", "chord": "space", "mode": "hold", "color": "emerald"},
+        {"name": "Undo", "chord": "ctrl+z", "mode": "tap", "color": "highlight"},
+        {"name": "Redo", "chord": "shift+ctrl+z", "mode": "tap", "color": "highlight"},
+        {"name": "Brush", "chord": "b", "mode": "tap", "color": "zinc"},
+        {"name": "Eraser", "chord": "e", "mode": "tap", "color": "zinc"},
+        {"name": "Color", "chord": "ctrl", "mode": "hold", "color": "accent"},
+        {"name": "Hand", "chord": "space", "mode": "hold", "color": "accent"},
         {"name": "Size", "chord": "shift", "mode": "hold", "color": "zinc"},
         {"name": "Reset View", "chord": "1", "mode": "tap", "color": "zinc"},
         {"name": "Rotate", "chord": "4", "mode": "tap", "color": "zinc"},
-        {"name": "Save", "chord": "ctrl+s", "mode": "tap", "color": "emerald"},
+        {"name": "Save", "chord": "ctrl+s", "mode": "tap", "color": "accent"},
     ],
     "Foliate Reader": [
-        {"name": "Next Page", "chord": "pagedown", "mode": "tap", "color": "blue"},
-        {"name": "Prev Page", "chord": "pageup", "mode": "tap", "color": "blue"},
-        {"name": "Bookmark", "chord": "ctrl+d", "mode": "tap", "color": "purple"},
+        {"name": "Next Page", "chord": "pagedown", "mode": "tap", "color": "highlight"},
+        {"name": "Prev Page", "chord": "pageup", "mode": "tap", "color": "highlight"},
+        {"name": "Bookmark", "chord": "ctrl+d", "mode": "tap", "color": "zinc"},
         {"name": "Search", "chord": "ctrl+f", "mode": "tap", "color": "zinc"},
         {"name": "Fullscreen", "chord": "f11", "mode": "tap", "color": "zinc"},
-        {"name": "Close Book", "chord": "ctrl+w", "mode": "tap", "color": "red"},
+        {"name": "Close Book", "chord": "ctrl+w", "mode": "tap", "color": "danger"},
     ],
     "General Studio": [
-        {"name": "Undo", "chord": "ctrl+z", "mode": "tap", "color": "blue"},
-        {"name": "Redo", "chord": "ctrl+y", "mode": "tap", "color": "blue"},
+        {"name": "Undo", "chord": "ctrl+z", "mode": "tap", "color": "highlight"},
+        {"name": "Redo", "chord": "ctrl+y", "mode": "tap", "color": "highlight"},
         {"name": "Copy", "chord": "ctrl+c", "mode": "tap", "color": "zinc"},
         {"name": "Paste", "chord": "ctrl+v", "mode": "tap", "color": "zinc"},
-        {"name": "Screenshot", "chord": "super+shift+s", "mode": "tap", "color": "purple"},
+        {"name": "Screenshot", "chord": "super+shift+s", "mode": "tap", "color": "accent"},
         {"name": "Search", "chord": "ctrl+f", "mode": "tap", "color": "zinc"},
-        {"name": "Save", "chord": "ctrl+s", "mode": "tap", "color": "emerald"},
-        {"name": "Lock", "chord": "super+l", "mode": "tap", "color": "red"},
+        {"name": "Save", "chord": "ctrl+s", "mode": "tap", "color": "accent"},
+        {"name": "Lock", "chord": "super+l", "mode": "tap", "color": "danger"},
     ]
 }
 
@@ -78,7 +79,7 @@ DEFAULT_CONFIG = {
     "active_profile": "Blender 3D",
     "appearance": {
         "columns": 2,
-        "button_size": "standard",  # Options: compact (46px), standard (54px), large (64px)
+        "button_size": "standard",  # Options: compact (54px), standard (66px), large (80px)
         "opacity": 0.94,
         "remember_position": True,
         "position": {"x": -1, "y": -1}
@@ -108,12 +109,10 @@ class ConfigManager:
                     loaded = yaml.safe_load(f)
                     if isinstance(loaded, dict):
                         self._deep_update(self.data, loaded)
-                        # Sanitize profiles: remove legacy emojis or removed buttons (Orbit, Pan)
                         self._sanitize_profiles()
             except Exception as e:
                 print(f"[YogaTouch] Error loading YAML config: {e}. Using defaults.")
         else:
-            # If legacy config.json exists, remove it or ignore and initialize clean YAML
             if os.path.exists(LEGACY_JSON_FILE):
                 try:
                     os.remove(LEGACY_JSON_FILE)
@@ -139,10 +138,8 @@ class ConfigManager:
             for b in buttons:
                 name = str(b.get("name", "")).strip().lower()
                 chord = str(b.get("chord", "")).strip().lower()
-                # Remove Orbit and Pan
                 if name in ("orbit", "pan") or chord in ("btn_middle", "shift+btn_middle"):
                     continue
-                # Strip emoji from icon if present
                 if "icon" in b:
                     del b["icon"]
                 cleaned_buttons.append(b)
@@ -155,7 +152,7 @@ class ConfigManager:
                 header = (
                     "# ==============================================================================\n"
                     "# YogaTouch - Configuration & Profiles (YAML)\n"
-                    "# PureRef-Style Always-On-Top Floating ExpressKeys for 2-in-1 Linux\n"
+                    "# Matte Black & Monochrome ExpressKeys for 2-in-1 Linux\n"
                     "# ==============================================================================\n\n"
                 )
                 f.write(header)

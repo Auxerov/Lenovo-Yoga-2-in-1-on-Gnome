@@ -2,7 +2,7 @@
 # ==============================================================================
 # YogaTouch - PureRef-Style Always-On-Top Floating ExpressKeys for 2-in-1 Linux
 # Author: Auxerov
-# Lightweight, HiDPI-Stabilized, Memory-Optimized Edition
+# Matte Black & Monochrome Edition (Zero Blue Light)
 # ==============================================================================
 
 import os
@@ -47,7 +47,7 @@ class TouchExpressButton(QPushButton):
     """
     A touch-friendly express key button with dual Tap and Hold/Latch modes.
     Never steals focus from active workspace (Blender, Affinity, Krita, etc.).
-    Clean minimalist typography with zero emojis.
+    Matte Black & Clean White Monochrome (Zero Blue Light).
     """
     def __init__(self, item, emitter, parent=None):
         super().__init__(parent)
@@ -74,49 +74,55 @@ class TouchExpressButton(QPushButton):
         self.update_style()
 
     def update_style(self):
-        color = self.item.get("color", "zinc")
+        color = str(self.item.get("color", "zinc")).lower()
 
-        color_accents = {
-            "blue": ("#111C2E", "#1D4ED8", "#60A5FA", "#2563EB"),
-            "purple": ("#1E1035", "#6B21A8", "#C084FC", "#7C3AED"),
-            "emerald": ("#062D22", "#047857", "#34D399", "#059669"),
-            "red": ("#2B0C0C", "#991B1B", "#F87171", "#DC2626"),
-            "zinc": ("#111114", "#27272A", "#71717A", "#3F3F46"),
+        # Soothing Matte Black & Muted Monochrome Palette (Zero Blue Light)
+        color_styles = {
+            "danger": ("#1E1212", "#3E2222", "#FCA5A5", "#8E8E93"),
+            "red": ("#1E1212", "#3E2222", "#FCA5A5", "#8E8E93"),
+            "highlight": ("#1A1A1E", "#34343C", "#FFFFFF", "#A8A8B2"),
+            "blue": ("#1A1A1E", "#34343C", "#FFFFFF", "#A8A8B2"),
+            "purple": ("#18181C", "#303038", "#F4F4F5", "#9C9CA4"),
+            "emerald": ("#161619", "#2A2A30", "#F4F4F5", "#94949C"),
+            "accent": ("#161619", "#2A2A30", "#F4F4F5", "#94949C"),
+            "zinc": ("#161618", "#27272C", "#F4F4F5", "#94949C"),
         }
-        bg, border, text_sub, active_border = color_accents.get(color, color_accents["zinc"])
+        bg, border, text_pri, text_sec = color_styles.get(color, color_styles["zinc"])
 
         if self.is_latched:
-            self.setStyleSheet(f"""
-                QPushButton {{
-                    background-color: {active_border};
-                    color: #FFFFFF;
+            # Clean High-Contrast Inverted White (Monochrome Studio Latch, Zero Blue Light)
+            self.setStyleSheet("""
+                QPushButton {
+                    background-color: #FFFFFF;
+                    color: #0A0A0C;
                     border: 2px solid #FFFFFF;
-                    border-radius: 8px;
+                    border-radius: 9px;
                     font-size: 12px;
-                    font-weight: 700;
+                    font-weight: 800;
                     padding: 4px;
                     text-align: center;
-                }}
+                }
             """)
         else:
             self.setStyleSheet(f"""
                 QPushButton {{
                     background-color: {bg};
-                    color: #F4F4F5;
+                    color: {text_pri};
                     border: 1px solid {border};
-                    border-radius: 8px;
+                    border-radius: 9px;
                     font-size: 12px;
                     font-weight: 700;
                     padding: 4px;
                     text-align: center;
                 }}
                 QPushButton:hover {{
-                    background-color: #27272A;
-                    border: 1px solid {active_border};
+                    background-color: #222228;
+                    border: 1px solid #484852;
                     color: #FFFFFF;
                 }}
                 QPushButton:pressed {{
-                    background-color: {active_border};
+                    background-color: #303038;
+                    border: 1px solid #FFFFFF;
                     color: #FFFFFF;
                 }}
             """)
@@ -140,7 +146,7 @@ class TouchExpressButton(QPushButton):
 
 
 class HeaderBar(QFrame):
-    """Sleek PureRef-style header with profile pill, drag handle, and quick controls."""
+    """Sleek Matte Black header with profile pill, drag handle, and quick controls."""
     def __init__(self, main_window):
         super().__init__(main_window)
         self.main_window = main_window
@@ -152,10 +158,10 @@ class HeaderBar(QFrame):
         self.setFixedHeight(36)
         self.setStyleSheet("""
             QFrame {
-                background-color: #000000;
+                background-color: #141416;
                 border-top-left-radius: 12px;
                 border-top-right-radius: 12px;
-                border-bottom: 1px solid #1F1F23;
+                border-bottom: 1px solid #222226;
             }
         """)
 
@@ -163,28 +169,28 @@ class HeaderBar(QFrame):
         layout.setContentsMargins(8, 0, 8, 0)
         layout.setSpacing(6)
 
-        # Profile Pill Button
+        # Profile Pill Button (Matte Black & Soft White, Zero Blue)
         self.profile_btn = QPushButton(self)
         self.profile_btn.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         self.profile_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.profile_btn.setStyleSheet("""
             QPushButton {
-                background-color: #121215;
-                color: #60A5FA;
-                border: 1px solid #27272A;
+                background-color: #1A1A1E;
+                color: #EDEDF0;
+                border: 1px solid #2D2D34;
                 border-radius: 11px;
                 font-size: 11px;
                 font-weight: 700;
                 letter-spacing: 0.5px;
-                padding: 3px 10px;
+                padding: 3px 12px;
             }
             QPushButton:hover {
-                background-color: #1E293B;
-                border-color: #3B82F6;
+                background-color: #25252C;
+                border-color: #484852;
                 color: #FFFFFF;
             }
             QPushButton:pressed {
-                background-color: #2563EB;
+                background-color: #32323A;
                 color: #FFFFFF;
             }
         """)
@@ -194,27 +200,27 @@ class HeaderBar(QFrame):
 
         # Drag handle
         grip = QLabel(":::", self)
-        grip.setStyleSheet("color: #52525B; font-size: 12px; font-weight: bold;")
+        grip.setStyleSheet("color: #4A4A54; font-size: 12px; font-weight: bold;")
         grip.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(grip, 1)
 
         # Settings button
         settings_btn = QPushButton("CFG", self)
-        settings_btn.setFixedSize(30, 22)
+        settings_btn.setFixedSize(32, 22)
         settings_btn.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         settings_btn.setStyleSheet("""
             QPushButton {
-                background-color: transparent;
-                color: #71717A;
-                border: 1px solid #27272A;
+                background-color: #18181C;
+                color: #9C9CA4;
+                border: 1px solid #2A2A30;
                 font-size: 10px;
                 font-weight: 700;
                 border-radius: 4px;
             }
             QPushButton:hover {
-                background-color: #27272A;
+                background-color: #26262C;
                 color: #FFFFFF;
-                border-color: #3F3F46;
+                border-color: #484852;
             }
         """)
         settings_btn.clicked.connect(self.main_window.open_settings)
@@ -227,14 +233,14 @@ class HeaderBar(QFrame):
         close_btn.setStyleSheet("""
             QPushButton {
                 background-color: transparent;
-                color: #71717A;
+                color: #686872;
                 border: none;
                 font-size: 12px;
                 border-radius: 4px;
             }
             QPushButton:hover {
-                background-color: #DC2626;
-                color: #FFFFFF;
+                background-color: #7F1D1D;
+                color: #FCA5A5;
             }
         """)
         close_btn.clicked.connect(self.main_window.hide)
@@ -251,9 +257,9 @@ class HeaderBar(QFrame):
         menu.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         menu.setStyleSheet("""
             QMenu {
-                background-color: #0A0A0C;
-                color: #F4F4F5;
-                border: 1px solid #27272A;
+                background-color: #121214;
+                color: #EDEDF0;
+                border: 1px solid #28282E;
                 border-radius: 8px;
                 padding: 4px;
             }
@@ -262,15 +268,16 @@ class HeaderBar(QFrame):
                 border-radius: 5px;
                 font-size: 11px;
                 font-weight: 600;
+                color: #D4D4D8;
                 margin: 1px 0px;
             }
             QMenu::item:selected {
-                background-color: #2563EB;
+                background-color: #24242A;
                 color: #FFFFFF;
             }
             QMenu::separator {
                 height: 1px;
-                background-color: #27272A;
+                background-color: #222226;
                 margin: 4px 6px;
             }
         """)
@@ -345,19 +352,19 @@ class SettingsDialog(QDialog):
         self.setFixedSize(620, 560)
         self.setStyleSheet("""
             QDialog {
-                background-color: #0A0A0C;
-                color: #E4E4E7;
+                background-color: #121214;
+                color: #EDEDF0;
             }
             QTabWidget::pane {
-                border: 1px solid #27272A;
-                background-color: #111114;
+                border: 1px solid #28282E;
+                background-color: #161618;
                 border-radius: 8px;
             }
             QTabBar::tab {
-                background-color: #18181B;
-                color: #A1A1AA;
+                background-color: #1A1A1E;
+                color: #9C9CA4;
                 padding: 8px 16px;
-                border: 1px solid #27272A;
+                border: 1px solid #28282E;
                 border-bottom: none;
                 border-top-left-radius: 6px;
                 border-top-right-radius: 6px;
@@ -366,30 +373,33 @@ class SettingsDialog(QDialog):
                 font-weight: 500;
             }
             QTabBar::tab:selected {
-                background-color: #27272A;
-                color: #60A5FA;
+                background-color: #24242A;
+                color: #FFFFFF;
                 font-weight: bold;
+                border-color: #383840;
             }
             QLabel {
                 color: #D4D4D8;
                 font-size: 13px;
             }
             QLineEdit, QComboBox, QPlainTextEdit {
-                background-color: #18181B;
+                background-color: #1A1A1E;
                 color: #FFFFFF;
-                border: 1px solid #3F3F46;
+                border: 1px solid #383840;
                 border-radius: 6px;
                 padding: 6px;
             }
             QPushButton {
-                background-color: #2563EB;
+                background-color: #24242A;
                 color: #FFFFFF;
+                border: 1px solid #383840;
                 border-radius: 6px;
                 padding: 6px 14px;
-                font-weight: 500;
+                font-weight: 600;
             }
             QPushButton:hover {
-                background-color: #3B82F6;
+                background-color: #32323A;
+                border-color: #484852;
             }
         """)
         self.setup_ui()
@@ -406,13 +416,13 @@ class SettingsDialog(QDialog):
 
         btn_layout = QHBoxLayout()
         reset_pos_btn = QPushButton("Reset Position (Top-Right)", self)
-        reset_pos_btn.setStyleSheet("background-color: #27272A; color: #E4E4E7;")
         reset_pos_btn.clicked.connect(self.reset_position)
         btn_layout.addWidget(reset_pos_btn)
 
         btn_layout.addStretch()
 
         close_btn = QPushButton("Done", self)
+        close_btn.setStyleSheet("background-color: #2C2C34; color: #FFFFFF; font-weight: bold;")
         close_btn.clicked.connect(self.accept)
         btn_layout.addWidget(close_btn)
         main_layout.addLayout(btn_layout)
@@ -463,7 +473,7 @@ class SettingsDialog(QDialog):
             row.setStyleSheet("""
                 QFrame {
                     background-color: #18181B;
-                    border: 1px solid #27272A;
+                    border: 1px solid #28282E;
                     border-radius: 6px;
                     padding: 4px;
                 }
@@ -474,14 +484,13 @@ class SettingsDialog(QDialog):
             name = btn.get("name", "")
             chord = btn.get("chord", "")
             mode = btn.get("mode", "tap")
-            color = btn.get("color", "zinc")
 
-            label = QLabel(f"<b>{name.upper()}</b>  <span style='color: #A1A1AA'>[{chord.upper()}]</span>  <span style='color: #60A5FA; font-size:11px'>({mode.upper()})</span>  <span style='color: #71717A; font-size:10px'>[{color}]</span>")
+            label = QLabel(f"<b>{name.upper()}</b>  <span style='color: #9C9CA4'>[{chord.upper()}]</span>  <span style='color: #D4D4D8; font-size:11px'>({mode.upper()})</span>")
             rl.addWidget(label, 1)
 
             del_btn = QPushButton("✕", row)
             del_btn.setFixedSize(24, 24)
-            del_btn.setStyleSheet("background-color: #7F1D1D; color: #FCA5A5; border: none; border-radius: 4px;")
+            del_btn.setStyleSheet("background-color: #5C1D1D; color: #FCA5A5; border: none; border-radius: 4px;")
             del_btn.clicked.connect(lambda _, i=idx: self.delete_button(i))
             rl.addWidget(del_btn)
 
@@ -529,11 +538,6 @@ class SettingsDialog(QDialog):
         mode_combo.addItems(["tap", "hold"])
         layout.addWidget(mode_combo)
 
-        layout.addWidget(QLabel("Color Accent:"))
-        color_combo = QComboBox(dlg)
-        color_combo.addItems(["zinc", "blue", "purple", "emerald", "red"])
-        layout.addWidget(color_combo)
-
         btn_box = QHBoxLayout()
         ok_btn = QPushButton("Add", dlg)
         ok_btn.clicked.connect(dlg.accept)
@@ -544,7 +548,6 @@ class SettingsDialog(QDialog):
             name = name_in.text().strip() or "Key"
             chord = chord_in.text().strip().lower() or "ctrl+z"
             mode = mode_combo.currentText()
-            color = color_combo.currentText()
 
             profile = self.profile_combo.currentText()
             if profile in self.config.data.get("profiles", {}):
@@ -552,7 +555,7 @@ class SettingsDialog(QDialog):
                     "name": name,
                     "chord": chord,
                     "mode": mode,
-                    "color": color
+                    "color": "zinc"
                 })
                 self.config.save()
                 self.refresh_buttons_list()
@@ -591,14 +594,14 @@ class SettingsDialog(QDialog):
 
         for name in list(self.config.data.get("profiles", {}).keys()):
             row = QFrame()
-            row.setStyleSheet("background-color: #18181B; border: 1px solid #27272A; border-radius: 6px; padding: 4px;")
+            row.setStyleSheet("background-color: #18181B; border: 1px solid #28282E; border-radius: 6px; padding: 4px;")
             rl = QHBoxLayout(row)
             btn_count = len(self.config.data["profiles"].get(name, []))
             rl.addWidget(QLabel(f"<b>{name}</b> ({btn_count} buttons)"), 1)
 
             if len(self.config.data.get("profiles", {})) > 1:
                 del_btn = QPushButton("Delete", row)
-                del_btn.setStyleSheet("background-color: #7F1D1D; color: #FFFFFF; font-size: 11px;")
+                del_btn.setStyleSheet("background-color: #5C1D1D; color: #FFFFFF; font-size: 11px;")
                 del_btn.clicked.connect(lambda _, n=name: self.delete_profile(n))
                 rl.addWidget(del_btn)
 
@@ -612,9 +615,9 @@ class SettingsDialog(QDialog):
             QMessageBox.warning(self, "Exists", "A profile with that name already exists!")
             return
         self.config.data["profiles"][name] = [
-            {"name": "Undo", "chord": "ctrl+z", "mode": "tap", "color": "blue"},
-            {"name": "Redo", "chord": "shift+ctrl+z", "mode": "tap", "color": "blue"},
-            {"name": "Save", "chord": "ctrl+s", "mode": "tap", "color": "emerald"},
+            {"name": "Undo", "chord": "ctrl+z", "mode": "tap", "color": "highlight"},
+            {"name": "Redo", "chord": "shift+ctrl+z", "mode": "tap", "color": "highlight"},
+            {"name": "Save", "chord": "ctrl+s", "mode": "tap", "color": "accent"},
         ]
         self.config.save()
         self.new_profile_name.clear()
@@ -699,7 +702,7 @@ class SettingsDialog(QDialog):
         layout.addLayout(sens_row)
 
         layout.addSpacing(10)
-        layout.addWidget(QLabel("<b>Keyboard Shortcut:</b> <span style='color: #60A5FA'>Super + O</span> (or run <code>yogatouch --toggle</code>)"))
+        layout.addWidget(QLabel("<b>Keyboard Shortcut:</b> <span style='color: #EDEDF0'>Super + O</span> (or run <code>yogatouch --toggle</code>)"))
 
         layout.addStretch()
         self.tabs.addTab(tab, "Layout & Gestures")
@@ -752,7 +755,7 @@ class SettingsDialog(QDialog):
         tab = QWidget()
         layout = QVBoxLayout(tab)
 
-        path_lbl = QLabel(f"<b>Config File:</b> <span style='color: #60A5FA'>{CONFIG_FILE}</span>")
+        path_lbl = QLabel(f"<b>Config File:</b> <span style='color: #EDEDF0'>{CONFIG_FILE}</span>")
         path_lbl.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
         layout.addWidget(path_lbl)
 
@@ -768,7 +771,7 @@ class SettingsDialog(QDialog):
         btn_row.addStretch()
 
         apply_btn = QPushButton("Save & Apply YAML", tab)
-        apply_btn.setStyleSheet("background-color: #059669; font-weight: bold;")
+        apply_btn.setStyleSheet("background-color: #2D3A30; border: 1px solid #3E5A44; color: #FFFFFF; font-weight: bold;")
         apply_btn.clicked.connect(self.save_and_apply_yaml)
         btn_row.addWidget(apply_btn)
         layout.addLayout(btn_row)
@@ -778,9 +781,9 @@ class SettingsDialog(QDialog):
         self.yaml_editor.setFont(font)
         self.yaml_editor.setStyleSheet("""
             QPlainTextEdit {
-                background-color: #09090B;
-                color: #E4E4E7;
-                border: 1px solid #27272A;
+                background-color: #0E0E10;
+                color: #EDEDF0;
+                border: 1px solid #28282E;
                 border-radius: 6px;
                 padding: 6px;
                 line-height: 1.3;
@@ -853,7 +856,6 @@ class YogaTouchWindow(QMainWindow):
         self.setup_file_watcher()
         self.setup_ipc()
 
-        # Free initialization memory
         trim_memory()
 
     def setup_window(self):
@@ -871,9 +873,9 @@ class YogaTouchWindow(QMainWindow):
         self.container = QFrame(self)
         self.container.setStyleSheet("""
             QFrame#mainContainer {
-                background-color: #000000;
-                border: 1.5px solid #27272A;
-                border-radius: 12px;
+                background-color: #121214;
+                border: 1.5px solid #28282E;
+                border-radius: 13px;
             }
         """)
         self.container.setObjectName("mainContainer")
@@ -955,9 +957,9 @@ class YogaTouchWindow(QMainWindow):
                 QMessageBox.warning(self, "Exists", "A profile with that name already exists!")
                 return
             self.config.data.setdefault("profiles", {})[name] = [
-                {"name": "Undo", "chord": "ctrl+z", "mode": "tap", "color": "blue"},
-                {"name": "Redo", "chord": "shift+ctrl+z", "mode": "tap", "color": "blue"},
-                {"name": "Save", "chord": "ctrl+s", "mode": "tap", "color": "emerald"},
+                {"name": "Undo", "chord": "ctrl+z", "mode": "tap", "color": "highlight"},
+                {"name": "Redo", "chord": "shift+ctrl+z", "mode": "tap", "color": "highlight"},
+                {"name": "Save", "chord": "ctrl+s", "mode": "tap", "color": "accent"},
             ]
             self.config.active_profile_name = name
             self.config.save()
@@ -1035,9 +1037,9 @@ class YogaTouchWindow(QMainWindow):
         menu = QMenu(self)
         menu.setStyleSheet("""
             QMenu {
-                background-color: #0A0A0C;
-                color: #F4F4F5;
-                border: 1px solid #27272A;
+                background-color: #121214;
+                color: #EDEDF0;
+                border: 1px solid #28282E;
                 border-radius: 8px;
                 padding: 4px;
             }
@@ -1045,9 +1047,10 @@ class YogaTouchWindow(QMainWindow):
                 padding: 6px 18px;
                 border-radius: 4px;
                 font-size: 12px;
+                color: #D4D4D8;
             }
             QMenu::item:selected {
-                background-color: #2563EB;
+                background-color: #24242A;
                 color: #FFFFFF;
             }
         """)
