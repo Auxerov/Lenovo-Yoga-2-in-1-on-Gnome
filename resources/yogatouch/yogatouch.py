@@ -2,25 +2,30 @@
 # ==============================================================================
 # YogaTouch - PureRef-Style Always-On-Top Floating ExpressKeys for 2-in-1 Linux
 # Author: Auxerov
+# Lightweight, HiDPI-Stabilized, Memory-Optimized Edition
 # ==============================================================================
 
 import os
 import sys
-
-# Force XCB (XWayland) for reliable Always-on-Top and Non-Focus-Stealing in GNOME Wayland
-os.environ["QT_QPA_PLATFORM"] = "xcb"
-
-import yaml
+import gc
+import ctypes
 import time
-import subprocess
+
+# Enforce HiDPI awareness and XCB before any Qt module is imported
+os.environ["QT_QPA_PLATFORM"] = "xcb"
+os.environ["QT_AUTO_SCREEN_SCALE_FACTOR"] = "1"
+os.environ["QT_ENABLE_HIGHDPI_SCALING"] = "1"
+os.environ["QT_SCALE_FACTOR_ROUNDING_POLICY"] = "PassThrough"
+
 from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QGridLayout, QPushButton, QLabel, QMenu, QDialog, QTabWidget,
     QLineEdit, QComboBox, QSlider, QScrollArea, QMessageBox,
-    QFrame, QGraphicsDropShadowEffect, QPlainTextEdit
+    QFrame, QPlainTextEdit
 )
 from PyQt6.QtCore import Qt, QPoint, pyqtSignal, QObject, QFileSystemWatcher, QTimer
-from PyQt6.QtGui import QColor, QFont, QAction
+from PyQt6.QtGui import QColor, QFont
+from PyQt6.QtNetwork import QLocalServer, QLocalSocket
 
 from config import ConfigManager, CONFIG_FILE
 from uinput_emitter import InputEmitter
@@ -29,11 +34,20 @@ from gesture_daemon import GestureMonitor
 IPC_SERVER_NAME = f"yogatouch_ipc_{os.getuid()}"
 
 
+def trim_memory():
+    """Forces Python garbage collection and returns freed heap memory to OS."""
+    gc.collect()
+    try:
+        ctypes.CDLL("libc.so.6").malloc_trim(0)
+    except Exception:
+        pass
+
+
 class TouchExpressButton(QPushButton):
     """
     A touch-friendly express key button with dual Tap and Hold/Latch modes.
-    Never steals focus from the active workspace (Blender, Affinity, Krita, etc.).
-    Clean typography with zero emojis.
+    Never steals focus from active workspace (Blender, Affinity, Krita, etc.).
+    Clean minimalist typography with zero emojis.
     """
     def __init__(self, item, emitter, parent=None):
         super().__init__(parent)
@@ -41,10 +55,8 @@ class TouchExpressButton(QPushButton):
         self.emitter = emitter
         self.is_latched = False
 
-        # NEVER steal keyboard/window focus
         self.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         self.setAttribute(Qt.WidgetAttribute.WA_AcceptTouchEvents, True)
-
         self.setup_ui()
 
     def setup_ui(self):
@@ -64,13 +76,12 @@ class TouchExpressButton(QPushButton):
     def update_style(self):
         color = self.item.get("color", "zinc")
 
-        # Color palette (pure, professional dark accents)
         color_accents = {
-            "blue": ("#131D2D", "#1E3A8A", "#60A5FA", "#2563EB"),
-            "purple": ("#1E1035", "#581C87", "#C084FC", "#7C3AED"),
-            "emerald": ("#062D22", "#065F46", "#34D399", "#059669"),
-            "red": ("#2B0C0C", "#7F1D1D", "#F87171", "#DC2626"),
-            "zinc": ("#121215", "#27272A", "#71717A", "#3F3F46"),
+            "blue": ("#111C2E", "#1D4ED8", "#60A5FA", "#2563EB"),
+            "purple": ("#1E1035", "#6B21A8", "#C084FC", "#7C3AED"),
+            "emerald": ("#062D22", "#047857", "#34D399", "#059669"),
+            "red": ("#2B0C0C", "#991B1B", "#F87171", "#DC2626"),
+            "zinc": ("#111114", "#27272A", "#71717A", "#3F3F46"),
         }
         bg, border, text_sub, active_border = color_accents.get(color, color_accents["zinc"])
 
@@ -81,7 +92,7 @@ class TouchExpressButton(QPushButton):
                     color: #FFFFFF;
                     border: 2px solid #FFFFFF;
                     border-radius: 8px;
-                    font-size: 11px;
+                    font-size: 12px;
                     font-weight: 700;
                     padding: 4px;
                     text-align: center;
@@ -94,8 +105,8 @@ class TouchExpressButton(QPushButton):
                     color: #F4F4F5;
                     border: 1px solid {border};
                     border-radius: 8px;
-                    font-size: 11px;
-                    font-weight: 600;
+                    font-size: 12px;
+                    font-weight: 700;
                     padding: 4px;
                     text-align: center;
                 }}
@@ -138,7 +149,7 @@ class HeaderBar(QFrame):
         self.setup_ui()
 
     def setup_ui(self):
-        self.setFixedHeight(34)
+        self.setFixedHeight(36)
         self.setStyleSheet("""
             QFrame {
                 background-color: #000000;
@@ -152,7 +163,7 @@ class HeaderBar(QFrame):
         layout.setContentsMargins(8, 0, 8, 0)
         layout.setSpacing(6)
 
-        # Profile Pill Button (Click to open list dropdown, scroll wheel to quick cycle)
+        # Profile Pill Button
         self.profile_btn = QPushButton(self)
         self.profile_btn.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         self.profile_btn.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -162,10 +173,10 @@ class HeaderBar(QFrame):
                 color: #60A5FA;
                 border: 1px solid #27272A;
                 border-radius: 11px;
-                font-size: 10px;
+                font-size: 11px;
                 font-weight: 700;
                 letter-spacing: 0.5px;
-                padding: 2px 10px;
+                padding: 3px 10px;
             }
             QPushButton:hover {
                 background-color: #1E293B;
@@ -181,22 +192,22 @@ class HeaderBar(QFrame):
         self.profile_btn.wheelEvent = self.on_profile_btn_wheel
         layout.addWidget(self.profile_btn)
 
-        # Subtle drag handle in center
+        # Drag handle
         grip = QLabel(":::", self)
-        grip.setStyleSheet("color: #3F3F46; font-size: 12px; font-weight: bold;")
+        grip.setStyleSheet("color: #52525B; font-size: 12px; font-weight: bold;")
         grip.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(grip, 1)
 
         # Settings button
         settings_btn = QPushButton("CFG", self)
-        settings_btn.setFixedSize(26, 20)
+        settings_btn.setFixedSize(30, 22)
         settings_btn.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         settings_btn.setStyleSheet("""
             QPushButton {
                 background-color: transparent;
                 color: #71717A;
                 border: 1px solid #27272A;
-                font-size: 9px;
+                font-size: 10px;
                 font-weight: 700;
                 border-radius: 4px;
             }
@@ -211,14 +222,14 @@ class HeaderBar(QFrame):
 
         # Close / Hide button
         close_btn = QPushButton("✕", self)
-        close_btn.setFixedSize(22, 20)
+        close_btn.setFixedSize(24, 22)
         close_btn.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         close_btn.setStyleSheet("""
             QPushButton {
                 background-color: transparent;
                 color: #71717A;
                 border: none;
-                font-size: 11px;
+                font-size: 12px;
                 border-radius: 4px;
             }
             QPushButton:hover {
@@ -247,11 +258,10 @@ class HeaderBar(QFrame):
                 padding: 4px;
             }
             QMenu::item {
-                padding: 7px 16px 7px 10px;
+                padding: 8px 18px 8px 10px;
                 border-radius: 5px;
                 font-size: 11px;
                 font-weight: 600;
-                letter-spacing: 0.4px;
                 margin: 1px 0px;
             }
             QMenu::item:selected {
@@ -394,14 +404,21 @@ class SettingsDialog(QDialog):
         self.setup_yaml_tab()
         main_layout.addWidget(self.tabs)
 
-        # Bottom buttons
         btn_layout = QHBoxLayout()
+        reset_pos_btn = QPushButton("Reset Position (Top-Right)", self)
+        reset_pos_btn.setStyleSheet("background-color: #27272A; color: #E4E4E7;")
+        reset_pos_btn.clicked.connect(self.reset_position)
+        btn_layout.addWidget(reset_pos_btn)
+
         btn_layout.addStretch()
 
         close_btn = QPushButton("Done", self)
         close_btn.clicked.connect(self.accept)
         btn_layout.addWidget(close_btn)
         main_layout.addLayout(btn_layout)
+
+    def reset_position(self):
+        self.main_window.snap_to_corner("top-right")
 
     def setup_buttons_tab(self):
         tab = QWidget()
@@ -420,7 +437,6 @@ class SettingsDialog(QDialog):
         top_bar.addWidget(add_btn)
         layout.addLayout(top_bar)
 
-        # Scroll area for current buttons
         scroll = QScrollArea(tab)
         scroll.setWidgetResizable(True)
         scroll.setStyleSheet("background-color: transparent; border: none;")
@@ -636,7 +652,7 @@ class SettingsDialog(QDialog):
         # Button Size
         layout.addWidget(QLabel("Button Size (Touch Comfort):"))
         size_combo = QComboBox(tab)
-        size_combo.addItems(["Compact (46px)", "Standard (52px)", "Large (62px)"])
+        size_combo.addItems(["Compact (54px)", "Standard (66px - Touch)", "Large (80px)"])
         cur_size = self.config.button_size
         size_map = {"compact": 0, "standard": 1, "large": 2}
         size_combo.setCurrentIndex(size_map.get(cur_size, 1))
@@ -785,12 +801,14 @@ class SettingsDialog(QDialog):
                 self.yaml_editor.setPlainText(f"# Error reading YAML: {e}")
 
     def open_yaml_externally(self):
+        import subprocess
         try:
             subprocess.Popen(["xdg-open", CONFIG_FILE])
         except Exception as e:
             QMessageBox.warning(self, "Error", f"Could not launch editor: {e}")
 
     def save_and_apply_yaml(self):
+        import yaml
         raw_text = self.yaml_editor.toPlainText()
         try:
             parsed = yaml.safe_load(raw_text)
@@ -835,8 +853,10 @@ class YogaTouchWindow(QMainWindow):
         self.setup_file_watcher()
         self.setup_ipc()
 
+        # Free initialization memory
+        trim_memory()
+
     def setup_window(self):
-        # Set XWayland window flags: Always on top, frameless, non-focus-stealing
         self.setWindowFlags(
             Qt.WindowType.WindowStaysOnTopHint |
             Qt.WindowType.FramelessWindowHint |
@@ -847,31 +867,21 @@ class YogaTouchWindow(QMainWindow):
         self.setAttribute(Qt.WidgetAttribute.WA_AcceptTouchEvents, True)
         self.setWindowOpacity(self.config.opacity)
 
-        self.restore_or_default_position()
-
     def setup_ui(self):
-        # Container frame for rounded border and pure OLED black background
         self.container = QFrame(self)
         self.container.setStyleSheet("""
             QFrame#mainContainer {
                 background-color: #000000;
-                border: 1px solid #27272A;
+                border: 1.5px solid #27272A;
                 border-radius: 12px;
             }
         """)
         self.container.setObjectName("mainContainer")
 
-        # Soft drop shadow (PureRef feel)
-        shadow = QGraphicsDropShadowEffect(self)
-        shadow.setBlurRadius(20)
-        shadow.setColor(QColor(0, 0, 0, 180))
-        shadow.setOffset(0, 6)
-        self.container.setGraphicsEffect(shadow)
-
         self.setCentralWidget(self.container)
 
         self.main_layout = QVBoxLayout(self.container)
-        self.main_layout.setContentsMargins(0, 0, 0, 6)
+        self.main_layout.setContentsMargins(0, 0, 0, 8)
         self.main_layout.setSpacing(6)
 
         # Header bar
@@ -881,11 +891,12 @@ class YogaTouchWindow(QMainWindow):
         # Buttons grid container
         self.grid_widget = QWidget(self.container)
         self.grid_layout = QGridLayout(self.grid_widget)
-        self.grid_layout.setContentsMargins(6, 0, 6, 0)
-        self.grid_layout.setSpacing(5)
+        self.grid_layout.setContentsMargins(8, 0, 8, 0)
+        self.grid_layout.setSpacing(6)
         self.main_layout.addWidget(self.grid_widget)
 
         self.rebuild_buttons()
+        self.restore_or_default_position()
 
     def rebuild_buttons(self):
         while self.grid_layout.count():
@@ -897,8 +908,13 @@ class YogaTouchWindow(QMainWindow):
         btn_items = self.config.current_buttons
         cols = max(1, self.config.columns)
         btn_size = self.config.button_size
-        height_map = {"compact": 44, "standard": 52, "large": 62}
-        btn_height = height_map.get(btn_size, 52)
+
+        # Touch-friendly dimensions
+        height_map = {"compact": 54, "standard": 66, "large": 80}
+        width_map = {"compact": 112, "standard": 132, "large": 154}
+
+        btn_height = height_map.get(btn_size, 66)
+        width_per_col = width_map.get(btn_size, 132)
 
         for idx, item in enumerate(btn_items):
             btn = TouchExpressButton(item, self.emitter, self.grid_widget)
@@ -908,8 +924,7 @@ class YogaTouchWindow(QMainWindow):
             self.grid_layout.addWidget(btn, r, c)
             self.buttons.append(btn)
 
-        width_per_col = 92 if btn_size == "compact" else 104 if btn_size == "standard" else 118
-        total_width = max(170, (cols * width_per_col) + 16)
+        total_width = max(180, (cols * width_per_col) + 16)
         self.setFixedWidth(total_width)
         self.adjustSize()
 
@@ -921,11 +936,15 @@ class YogaTouchWindow(QMainWindow):
     def open_settings(self):
         dlg = SettingsDialog(self)
         dlg.exec()
+        dlg.deleteLater()
+        trim_memory()
 
     def open_settings_profiles(self):
         dlg = SettingsDialog(self)
         dlg.tabs.setCurrentIndex(1)
         dlg.exec()
+        dlg.deleteLater()
+        trim_memory()
 
     def open_new_profile_dialog(self):
         from PyQt6.QtWidgets import QInputDialog
@@ -946,35 +965,57 @@ class YogaTouchWindow(QMainWindow):
             self.rebuild_buttons()
 
     def snap_to_corner(self, corner="top-right"):
-        screen = QApplication.primaryScreen().availableGeometry()
+        screen = QApplication.primaryScreen()
+        geom = screen.availableGeometry() if screen else None
+        if not geom:
+            return
+
         w, h = self.width(), self.height()
         margin = 24
 
         if corner == "top-right":
-            x = screen.x() + screen.width() - w - margin
-            y = screen.y() + 40
+            x = geom.x() + geom.width() - w - margin
+            y = geom.y() + 36
         elif corner == "top-left":
-            x = screen.x() + margin
-            y = screen.y() + 40
+            x = geom.x() + margin
+            y = geom.y() + 36
         elif corner == "bottom-right":
-            x = screen.x() + screen.width() - w - margin
-            y = screen.y() + screen.height() - h - margin
+            x = geom.x() + geom.width() - w - margin
+            y = geom.y() + geom.height() - h - margin
         elif corner == "bottom-left":
-            x = screen.x() + margin
-            y = screen.y() + screen.height() - h - margin
+            x = geom.x() + margin
+            y = geom.y() + geom.height() - h - margin
         else:
-            x = screen.x() + (screen.width() - w) // 2
-            y = screen.y() + (screen.height() - h) // 2
+            x = geom.x() + (geom.width() - w) // 2
+            y = geom.y() + (geom.height() - h) // 2
 
         self.move(x, y)
         self.save_current_position()
 
     def restore_or_default_position(self):
         pos = self.config.data.get("appearance", {}).get("position", {"x": -1, "y": -1})
-        if pos.get("x", -1) != -1 and pos.get("y", -1) != -1 and self.config.data.get("appearance", {}).get("remember_position", True):
-            self.move(pos["x"], pos["y"])
-        else:
-            self.snap_to_corner("top-right")
+        x = pos.get("x", -1)
+        y = pos.get("y", -1)
+
+        screen = QApplication.primaryScreen()
+        if screen:
+            geom = screen.availableGeometry()
+            dock_w = self.width()
+            dock_h = self.height()
+
+            # Sanity check: Ensure position is comfortably within screen and not trapped in top-left corner
+            is_valid = (
+                x >= geom.x() + 20 and
+                x + dock_w <= geom.x() + geom.width() + 10 and
+                y >= geom.y() + 20 and
+                y + dock_h <= geom.y() + geom.height() + 10 and
+                not (x < 120 and y < 100)
+            )
+            if is_valid and self.config.data.get("appearance", {}).get("remember_position", True):
+                self.move(x, y)
+                return
+
+        self.snap_to_corner("top-right")
 
     def save_current_position(self):
         if "appearance" not in self.config.data:
@@ -983,7 +1024,6 @@ class YogaTouchWindow(QMainWindow):
         self.config.save()
 
     def wheelEvent(self, event):
-        # PureRef-style scroll wheel to adjust opacity
         delta = event.angleDelta().y()
         cur_op = self.windowOpacity()
         new_op = max(0.20, min(1.0, cur_op + (0.05 if delta > 0 else -0.05)))
@@ -1012,7 +1052,6 @@ class YogaTouchWindow(QMainWindow):
             }
         """)
 
-        # Profiles submenu
         profile_menu = menu.addMenu("Switch Profile")
         current_prof = self.config.active_profile_name
         for p in self.config.data.get("profiles", {}).keys():
@@ -1064,6 +1103,7 @@ class YogaTouchWindow(QMainWindow):
     def toggle_visibility(self):
         if self.isVisible():
             self.hide()
+            trim_memory()
         else:
             self.show()
             self.raise_()
@@ -1085,7 +1125,6 @@ class YogaTouchWindow(QMainWindow):
         self.gesture_monitor.start()
 
     def setup_file_watcher(self):
-        """Watches config.yaml and automatically reloads configuration when edited externally."""
         self.watcher = QFileSystemWatcher(self)
         if os.path.exists(CONFIG_FILE):
             self.watcher.addPath(CONFIG_FILE)
@@ -1093,7 +1132,6 @@ class YogaTouchWindow(QMainWindow):
         self.watcher.fileChanged.connect(self.on_file_changed)
 
     def on_file_changed(self, path):
-        # Debounce multiple file write events
         QTimer.singleShot(150, self._reload_from_external_edit)
 
     def _reload_from_external_edit(self):
@@ -1105,12 +1143,10 @@ class YogaTouchWindow(QMainWindow):
             print("[YogaTouch] Detected external change in config.yaml. Reloading...")
             self.config.load()
             self.apply_config_update()
-            # Re-add to watcher if removed by atomic save
             if CONFIG_FILE not in self.watcher.files():
                 self.watcher.addPath(CONFIG_FILE)
 
     def apply_config_update(self):
-        """Applies updated config parameters across the UI and gesture monitor."""
         self.setWindowOpacity(self.config.opacity)
         self.header.update_profile_title()
         self.rebuild_buttons()
@@ -1124,7 +1160,6 @@ class YogaTouchWindow(QMainWindow):
             )
 
     def setup_ipc(self):
-        from PyQt6.QtNetwork import QLocalServer
         self.ipc_server = QLocalServer(self)
         self.ipc_server.removeServer(IPC_SERVER_NAME)
         self.ipc_server.newConnection.connect(self.handle_ipc_connection)
@@ -1147,6 +1182,7 @@ class YogaTouchWindow(QMainWindow):
             socket.write(b"ok:shown\n")
         elif cmd == "hide":
             self.hide()
+            trim_memory()
             socket.write(b"ok:hidden\n")
         elif cmd.startswith("profile:"):
             prof = cmd.split(":", 1)[1]
@@ -1164,14 +1200,12 @@ class YogaTouchWindow(QMainWindow):
         QApplication.quit()
 
     def closeEvent(self, event):
-        # PureRef style: close hides overlay instead of terminating daemon
         self.hide()
+        trim_memory()
         event.ignore()
 
 
 def send_ipc_command(cmd):
-    """Sends a command to an already running YogaTouch process."""
-    from PyQt6.QtNetwork import QLocalSocket
     socket = QLocalSocket()
     socket.connectToServer(IPC_SERVER_NAME)
     if socket.waitForConnected(600):
@@ -1208,12 +1242,10 @@ def main():
                 print("YogaTouch is not running.")
                 sys.exit(1)
 
-    # If already running and launched without args, toggle it
     if send_ipc_command("toggle"):
         print("[YogaTouch] Existing instance toggled.")
         sys.exit(0)
 
-    # Start main application
     app = QApplication(sys.argv)
     app.setApplicationName("YogaTouch")
     app.setApplicationDisplayName("YogaTouch ExpressKeys")

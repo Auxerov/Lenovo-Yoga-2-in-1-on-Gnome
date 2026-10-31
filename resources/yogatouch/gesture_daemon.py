@@ -2,6 +2,7 @@
 # ==============================================================================
 # YogaTouch - Multi-Touch 4-to-5 Finger Pinch Gesture Detector
 # Author: Auxerov
+# Lightweight, direct evdev kernel event listener (zero child processes)
 # ==============================================================================
 
 import os
@@ -10,7 +11,6 @@ import math
 import time
 import select
 import threading
-import subprocess
 import evdev
 from evdev import ecodes
 
@@ -156,7 +156,6 @@ class GestureMonitor(threading.Thread):
         self.cooldown = cooldown
         self.running = True
         self.devices = {}  # fd: (InputDevice, DeviceSlotState)
-        self.libinput_proc = None
 
     def scan_devices(self):
         # Close old file descriptors
@@ -191,11 +190,6 @@ class GestureMonitor(threading.Thread):
 
     def run(self):
         self.scan_devices()
-
-        # Start libinput watcher helper for touchpad pinch events
-        t = threading.Thread(target=self._run_libinput_watcher, daemon=True)
-        t.start()
-
         reconnect_cooldown = time.time()
 
         while self.running:
@@ -226,8 +220,8 @@ class GestureMonitor(threading.Thread):
                     except Exception:
                         pass
 
-            # Periodic device rescan every 10 seconds
-            if time.time() - reconnect_cooldown > 10.0:
+            # Periodic device rescan every 12 seconds
+            if time.time() - reconnect_cooldown > 12.0:
                 reconnect_cooldown = time.time()
                 current_count = len(self.devices)
                 available = []
@@ -241,47 +235,6 @@ class GestureMonitor(threading.Thread):
                         pass
                 if len(available) != current_count:
                     self.scan_devices()
-
-    def _run_libinput_watcher(self):
-        """Monitors touchpad pinch gestures via libinput debug-events as a secondary source."""
-        last_libinput_trigger = 0.0
-        while self.running:
-            try:
-                self.libinput_proc = subprocess.Popen(
-                    ["libinput", "debug-events"],
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.DEVNULL,
-                    text=True
-                )
-                for line in self.libinput_proc.stdout:
-                    if not self.running:
-                        break
-                    # Look for 4 or 5 finger pinch updates on touchpad
-                    if "GESTURE_PINCH" in line and (" 4 " in line or " 5 " in line):
-                        parts = line.split()
-                        scale_val = None
-                        for p in parts:
-                            if p.endswith("*"):
-                                try:
-                                    scale_val = float(p[:-1])
-                                    break
-                                except ValueError:
-                                    pass
-                        now = time.time()
-                        if scale_val is not None and scale_val < 0.82:
-                            if now - last_libinput_trigger > self.cooldown:
-                                last_libinput_trigger = now
-                                print(f"[YogaTouch] libinput 4/5-finger pinch triggered (scale={scale_val})!")
-                                if self.callback:
-                                    self.callback()
-            except Exception:
-                time.sleep(3.0)
-            finally:
-                if self.libinput_proc:
-                    try:
-                        self.libinput_proc.terminate()
-                    except Exception:
-                        pass
 
     def update_settings(self, sensitivity=None, min_fingers=None, max_fingers=None, cooldown=None):
         if sensitivity:
@@ -305,11 +258,6 @@ class GestureMonitor(threading.Thread):
 
     def stop(self):
         self.running = False
-        if self.libinput_proc:
-            try:
-                self.libinput_proc.terminate()
-            except Exception:
-                pass
         for fd, (dev, _) in list(self.devices.items()):
             try:
                 dev.close()

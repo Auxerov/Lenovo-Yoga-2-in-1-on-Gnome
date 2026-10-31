@@ -133,13 +133,18 @@ cat << EOF > "${SYSTEMD_USER_DIR}/yogatouch.service"
 [Unit]
 Description=YogaTouch Floating ExpressKeys & Multi-Touch Gesture Monitor
 After=graphical-session.target
+Wants=graphical-session.target
 
 [Service]
 Type=simple
+ExecStartPre=/usr/bin/sleep 1.5
 ExecStart=${BIN_DIR}/yogatouch
 Restart=on-failure
 RestartSec=3s
 Environment=QT_QPA_PLATFORM=xcb
+Environment=QT_AUTO_SCREEN_SCALE_FACTOR=1
+Environment=QT_ENABLE_HIGHDPI_SCALING=1
+Environment=QT_SCALE_FACTOR_ROUNDING_POLICY=PassThrough
 
 [Install]
 WantedBy=graphical-session.target
