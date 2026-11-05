@@ -10,7 +10,7 @@
 #      * Clears legacy HSA_OVERRIDE_GFX_VERSION environment variable so Blender
 #        uses modern, native HIP compute kernels directly on Linux.
 #   2. Stylus 3D Viewport Navigation & Touch Gestures:
-#      * Lower Barrel Button (Middle Click) -> Orbit 3D Viewport (view3d.rotate)
+#      * Lower Barrel Button (Middle Click) -> Turntable Orbit via Vimender (with evdev hardware release guard for Fedora 45 Wayland)
 #      * Upper Barrel Button -> Pan 3D Viewport via Vimender direct hardware evdev
 #      * Runs on Native Wayland (100% crisp fractional 1.25x scaling, no XWayland blur or giant UI)
 #      * Elevates input group permissions so evdev multi-touch and stylus work out-of-the-box
