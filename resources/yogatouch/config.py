@@ -2,7 +2,7 @@
 # ==============================================================================
 # YogaTouch - Configuration & Profile Manager (YAML-based)
 # Author: Auxerov
-# Matte Black & Monochrome Edition (Zero Blue Light)
+# Matte Black & Monochrome Edition (Zero Blue Light, Scalable HiDPI)
 # ==============================================================================
 
 import os
@@ -79,7 +79,8 @@ DEFAULT_CONFIG = {
     "active_profile": "Blender 3D",
     "appearance": {
         "columns": 2,
-        "button_size": "standard",  # Options: compact (54px), standard (66px), large (80px)
+        "button_size": "standard",  # Options: compact, standard, large
+        "ui_scale": 1.0,  # Scale multiplier (0.75 to 2.0, default 1.0)
         "opacity": 0.94,
         "remember_position": True,
         "position": {"x": -1, "y": -1}
@@ -207,6 +208,26 @@ class ConfigManager:
             self.data["appearance"] = {}
         self.data["appearance"]["button_size"] = val
         self.save()
+
+    @property
+    def ui_scale(self):
+        val = self.data.get("appearance", {}).get("ui_scale", 1.0)
+        try:
+            val = float(val)
+            return max(0.6, min(2.5, val))
+        except (ValueError, TypeError):
+            return 1.0
+
+    @ui_scale.setter
+    def ui_scale(self, val):
+        if "appearance" not in self.data:
+            self.data["appearance"] = {}
+        try:
+            fval = round(max(0.6, min(2.5, float(val))), 2)
+            self.data["appearance"]["ui_scale"] = fval
+            self.save()
+        except (ValueError, TypeError):
+            pass
 
     @property
     def opacity(self):
