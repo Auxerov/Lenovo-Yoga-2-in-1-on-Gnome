@@ -45,7 +45,6 @@ int BPF_PROG(lenovo_pen_fix_eraser, struct hid_bpf_ctx *hctx)
 	if (data[1] & 0x0c) {
 		data[1] &= ~0x0c; /* clear Eraser and Invert */
 		data[1] |= 0x10;  /* set Secondary Barrel Switch (BTN_STYLUS2) */
-		data[1] |= 0x20;  /* ensure In Range is set */
 		data[1] &= ~0x01; /* clear Tip Switch */
 		data[6] = 0;      /* clear pressure */
 		data[7] = 0;
