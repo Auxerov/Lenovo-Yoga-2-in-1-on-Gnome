@@ -43,10 +43,8 @@ int BPF_PROG(lenovo_pen_fix_eraser, struct hid_bpf_ctx *hctx)
 	 * while navigating (Orbit or Pan) when the pen tip touches or grazes the screen.
 	 */
 	if (data[1] & 0x0c) {
-		data[1] &= ~0x0c; /* clear Eraser and Invert */
-		data[1] |= 0x10;  /* set Secondary Barrel Switch (BTN_STYLUS2) */
-		data[1] |= 0x20;  /* ensure In Range is set (crucial: prevents cursor vanishing on click) */
-		data[1] &= ~0x01; /* clear Tip Switch */
+		data[1] &= ~0x0d; /* clear Eraser (0x04), Invert (0x08), and Tip Switch (0x01) */
+		data[1] |= 0x10;  /* set Secondary Barrel Switch (BTN_STYLUS2); preserve In-Range as reported by hardware */
 		data[6] = 0;      /* clear pressure */
 		data[7] = 0;
 	} else if (data[1] & 0x02) {
