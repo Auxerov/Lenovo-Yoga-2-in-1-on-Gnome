@@ -1,37 +1,48 @@
 #!/usr/bin/env bash
 # ==============================================================================
-# Lenovo Yoga 7 2-in-1 Linux Configuration Suite
-# Author: Auxerov
-# File: 01-pen-and-touch-fix.sh
+# Lenovo Yoga 7 2-in-1 Stylus & Hardware Fix (Blender'dan Bağımsız Sistem Çözümü)
+# Yazar: Auxerov
 # 
-# Functionality:
-# - HID-BPF kernel driver patch for Lenovo Digital Pen 2 & Wacom HID 5363 digitizer.
-# - Hardware-level transformation of lower barrel button (Eraser mode) into BTN_STYLUS2.
-# - Suppresses accidental tip clicks and pressure when holding barrel buttons during
-#   navigation (Orbit / Pan) while grazing or touching the screen.
-# - Configures GNOME Stylus button mappings (Lower -> Middle Click / Orbit, Upper -> Forward / Pan).
+# Bu script kalemin:
+#  1. Ekrana yaklaşma/uzaklaşma (proximity) ve kfifo taşma (takılma) sorununu çözer.
+#  2. Alt tuşu evrensel Orta Tık (Middle Click) yapar (Chrome, Masaüstü, Blender vb.).
+#  3. Yeniden başlatma (boot) ve uykudan uyanma (sleep/resume) sonrasında kalıcıdır.
 # ==============================================================================
 
 set -e
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-BPF_OBJ="${SCRIPT_DIR}/resources/lenovo_pen_fix.bpf.o"
-
-echo "=== [1/4] HID-BPF Driver & Udev Setup ==="
-if [ ! -f "$BPF_OBJ" ]; then
-    echo "ERROR: $BPF_OBJ not found!"
+if [ "$EUID" -ne 0 ]; then
+    echo "HATA: Lütfen bu scripti sudo ile çalıştırın: sudo $0"
     exit 1
 fi
 
-sudo mkdir -p /etc/udev-hid-bpf /etc/udev/rules.d /etc/libwacom
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+BPF_SRC="/home/auxerov/Documents/Projects/Lenovo 2 in 1 Settings/resources/lenovo_pen_fix.bpf.o"
+BPF_DEST="/etc/udev-hid-bpf/lenovo_pen_fix.bpf.o"
 
-# Copy BPF binary to system directory
-sudo cp "$BPF_OBJ" /etc/udev-hid-bpf/lenovo_pen_fix.bpf.o
-sudo chmod 644 /etc/udev-hid-bpf/lenovo_pen_fix.bpf.o
+echo "=== [1/4] Güncellenmiş HID-BPF Sürücüsü Kuruluyor ==="
+mkdir -p /etc/udev-hid-bpf /etc/udev/rules.d /etc/systemd/system /etc/systemd/system-sleep
 
-# Create Udev rule (loads BPF program when stylus device attaches or wakes up)
-echo "Writing udev rule (/etc/udev/rules.d/99-hid-bpf-lenovo_pen_fix.rules)..."
-sudo tee /etc/udev/rules.d/99-hid-bpf-lenovo_pen_fix.rules > /dev/null << 'EOF'
+if [ ! -f "$BPF_SRC" ]; then
+    echo "HATA: $BPF_SRC bulunamadı!"
+    exit 1
+fi
+
+cp "$BPF_SRC" "$BPF_DEST"
+chmod 644 "$BPF_DEST"
+echo "✓ Sürücü ikili dosyası /etc/udev-hid-bpf/ altına yerleştirildi."
+
+echo "=== [2/4] Donanıma ve Kernel'a Filtre Uygulanıyor ==="
+for dev in /sys/bus/hid/devices/*056A:5363*; do
+    if [ -d "$dev" ]; then
+        echo "Donanım cihazına bağlanıyor: $dev"
+        /usr/bin/udev-hid-bpf add --replace "$dev" "$BPF_DEST" || true
+    fi
+done
+
+echo "=== [3/4] Kalıcılık Kuralları (Udev & Systemd Boot/Sleep) Yazılıyor ==="
+# Udev kuralı (Cihaz takıldığında veya uyandığında otomatik yükler)
+tee /etc/udev/rules.d/99-hid-bpf-lenovo_pen_fix.rules > /dev/null << 'EOF'
 ACTION!="add|remove", GOTO="hid_bpf_end"
 SUBSYSTEM!="hid", GOTO="hid_bpf_end"
 
@@ -44,9 +55,8 @@ ACTION=="remove", ENV{MODALIAS}=="hid:b0018g*v0000056Ap00005363", RUN{program}+=
 LABEL="hid_bpf_end"
 EOF
 
-# Create systemd service for boot-time and resume persistence
-echo "Creating systemd service (/etc/systemd/system/lenovo-pen-fix.service)..."
-sudo tee /etc/systemd/system/lenovo-pen-fix.service > /dev/null << 'EOF'
+# Systemd boot servisi
+tee /etc/systemd/system/lenovo-pen-fix.service > /dev/null << 'EOF'
 [Unit]
 Description=Lenovo Digital Pen 2 HID-BPF Driver Fix
 After=systemd-udevd.service suspend.target hibernate.target hybrid-sleep.target suspend-then-hibernate.target
@@ -61,10 +71,8 @@ RemainAfterExit=yes
 WantedBy=multi-user.target suspend.target hibernate.target hybrid-sleep.target suspend-then-hibernate.target
 EOF
 
-# Sleep/Resume hook to ensure BPF is re-attached immediately after waking from sleep
-echo "Creating system-sleep hook (/etc/systemd/system-sleep/lenovo-pen-fix.sh)..."
-sudo mkdir -p /etc/systemd/system-sleep
-sudo tee /etc/systemd/system-sleep/lenovo-pen-fix.sh > /dev/null << 'EOF'
+# Uykudan uyanma (sleep/resume) kancası
+tee /etc/systemd/system-sleep/lenovo-pen-fix.sh > /dev/null << 'EOF'
 #!/bin/sh
 case "$1" in
     post)
@@ -72,58 +80,31 @@ case "$1" in
         ;;
 esac
 EOF
-sudo chmod +x /etc/systemd/system-sleep/lenovo-pen-fix.sh
+chmod +x /etc/systemd/system-sleep/lenovo-pen-fix.sh
 
-sudo systemctl daemon-reload
-sudo systemctl enable --now lenovo-pen-fix.service
+systemctl daemon-reload
+systemctl enable --now lenovo-pen-fix.service
+udevadm control --reload
+udevadm trigger --subsystem-match=hid || true
 
-echo "=== [2/4] Libwacom Hardware Definitions ==="
-# Ensure GNOME Settings identifies the stylus with two distinct barrel buttons
-sudo tee /etc/libwacom/wacom-hid-5363-pen.tablet > /dev/null << 'EOF'
-[Device]
-Name=Wacom HID 5363 Pen
-ModelName=WACF2200
-Class=ISDV4
-DeviceMatch=i2c|056a|5363
-IntegratedIn=Display;System
-Styli=0x56a:0x866c;
+echo "=== [4/4] GNOME Evrensel Kalem Ayarları Yapılandırılıyor ==="
+USER_NAME="${SUDO_USER:-$USER}"
+USER_UID="$(id -u "$USER_NAME")"
 
-[Features]
-Stylus=true
-Reversible=false
-Touch=true
-NumRings=0
-EOF
-
-sudo tee /etc/libwacom/lenovo.stylus > /dev/null << 'EOF'
-[0x56a:0x866c]
-Name=Lenovo Digital Pen 2
-Group=isdv4-aes
-Buttons=2
-EraserType=None
-Axes=Tilt;Pressure
-Type=Mobile
-EOF
-
-echo "=== [3/4] Injecting Driver into Running Hardware ==="
-for dev in /sys/bus/hid/devices/*056A:5363*; do
-    if [ -d "$dev" ]; then
-        echo "Found device: $dev, attaching HID-BPF filter..."
-        sudo /usr/bin/udev-hid-bpf add --replace "$dev" /etc/udev-hid-bpf/lenovo_pen_fix.bpf.o || true
-    fi
-done
-
-sudo udevadm control --reload
-sudo udevadm trigger --subsystem-match=hid || true
-
-echo "=== [4/4] GNOME Stylus Button Mappings (Dconf) ==="
-# Configure GNOME stylus button actions per user:
-# - button-action (Upper button / Barrel 1) -> 'forward' (Blender Pan)
-# - secondary-button-action (Lower button / Barrel 2) -> 'middle' (Blender Orbit)
-dconf write /org/gnome/desktop/peripherals/stylus/80e4ef9b/button-action "'forward'"
+# Kullanıcı oturumundaki dconf ayarlarını güncelle
+sudo -u "$USER_NAME" DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/${USER_UID}/bus" bash << 'USER_EOF'
 dconf write /org/gnome/desktop/peripherals/stylus/80e4ef9b/secondary-button-action "'middle'"
 dconf write /org/gnome/desktop/peripherals/stylus/80e4ef9b/eraser-button-action "'middle'"
 dconf write /org/gnome/desktop/peripherals/stylus/80e4ef9b/eraser-button-mode "'button'"
+dconf write /org/gnome/desktop/peripherals/stylus/80e4ef9b/button-action "'forward'"
 dconf write /org/gnome/desktop/peripherals/stylus/80e4ef9b/pressure-curve "[0, 0, 100, 100]"
+USER_EOF
 
-echo "-> Lenovo Digital Pen 2 & touch fixes successfully applied!"
+echo ""
+echo "=============================================================================="
+echo "✓ BAŞARILI: Kalem donanım düzeltmesi kalıcı olarak uygulandı!"
+echo "  - Proximity kfifo taşma (takılma) sorunu giderildi."
+echo "  - Alt tuş: Evrensel Orta Tık (Chrome sekmeleri, Blender Orbit vb.)."
+echo "  - Üst tuş: İleri / Pan."
+echo "  - Yeniden başlatma ve uyku modundan sonra da otomatik çalışır."
+echo "=============================================================================="
