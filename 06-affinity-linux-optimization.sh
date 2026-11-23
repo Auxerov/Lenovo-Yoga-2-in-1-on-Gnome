@@ -51,6 +51,7 @@ if [ -d "$AFFINITY_APP_DIR" ]; then
 
     find "$AFFINITY_APP_DIR" -type f -name "PerformancePreferences.xml" | while read -r f; do
         sed -i 's/<RAMUsageLimit>[0-9]*<\/RAMUsageLimit>/<RAMUsageLimit>8192<\/RAMUsageLimit>/g' "$f"
+        sed -i '/<RAMUsageLimit>/,/<\/RAMUsageLimit>/ s/<Value>[0-9]*<\/Value>/<Value>8192<\/Value>/g' "$f"
         sed -i 's/<UndoLimit>[0-9]*<\/UndoLimit>/<UndoLimit>256<\/UndoLimit>/g' "$f"
         sed -i 's/<ViewQuality>[0-9]*<\/ViewQuality>/<ViewQuality>1<\/ViewQuality>/g' "$f"
         sed -i 's/<RetinaPassIndex>[0-9]*<\/RetinaPassIndex>/<RetinaPassIndex>1<\/RetinaPassIndex>/g' "$f"
