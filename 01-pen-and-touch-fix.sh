@@ -1,12 +1,14 @@
 #!/usr/bin/env bash
 # ==============================================================================
-# Lenovo Yoga 7 2-in-1 Stylus & Hardware Fix (Blender'dan Bağımsız Sistem Çözümü)
+# Lenovo Yoga 7 2-in-1 Stylus, Touch & Screen Auto-Rotation Hardware Fix
 # Yazar: Auxerov
 # 
-# Bu script kalemin:
-#  1. Ekrana yaklaşma/uzaklaşma (proximity) ve kfifo taşma (takılma) sorununu çözer.
-#  2. Alt tuşu evrensel Orta Tık (Middle Click) yapar (Chrome, Masaüstü, Blender vb.).
-#  3. Yeniden başlatma (boot) ve uykudan uyanma (sleep/resume) sonrasında kalıcıdır.
+# Bu script donanım düzeyinde:
+#  1. Kalemin yaklaşma/uzaklaşma (proximity) ve kfifo taşma (takılma) sorununu çözer.
+#  2. Kalemin alt tuşunu evrensel Orta Tık (Middle Click) yapar (Chrome, Masaüstü, Blender vb.).
+#  3. AMD Sensor Fusion Hub (AMD-SFH) ivmeölçerinin "Event data for report 1 was too short"
+#     kernel hatasını gidererek GNOME ekran otomatik döndürmesini (auto-rotation) etkinleştirir.
+#  4. Yeniden başlatma (boot) ve uykudan uyanma (sleep/resume) sonrasında kalıcıdır.
 # ==============================================================================
 
 set -e
@@ -17,31 +19,54 @@ if [ "$EUID" -ne 0 ]; then
 fi
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-BPF_SRC="/home/auxerov/Documents/Projects/Lenovo 2 in 1 Settings/resources/lenovo_pen_fix.bpf.o"
-BPF_DEST="/etc/udev-hid-bpf/lenovo_pen_fix.bpf.o"
+BPF_DIR="/home/auxerov/Documents/Projects/Lenovo 2 in 1 Settings/resources"
 
-echo "=== [1/4] Güncellenmiş HID-BPF Sürücüsü Kuruluyor ==="
+PEN_BPF_SRC="${BPF_DIR}/lenovo_pen_fix.bpf.o"
+PEN_BPF_DEST="/etc/udev-hid-bpf/lenovo_pen_fix.bpf.o"
+
+SENSOR_BPF_SRC="${BPF_DIR}/lenovo_sensor_fix.bpf.o"
+SENSOR_BPF_DEST="/etc/udev-hid-bpf/lenovo_sensor_fix.bpf.o"
+
+echo "=== [1/4] Güncellenmiş HID-BPF Sürücüleri Kuruluyor ==="
 mkdir -p /etc/udev-hid-bpf /etc/udev/rules.d /etc/systemd/system /etc/systemd/system-sleep
 
-if [ ! -f "$BPF_SRC" ]; then
-    echo "HATA: $BPF_SRC bulunamadı!"
+if [ ! -f "$PEN_BPF_SRC" ]; then
+    echo "HATA: $PEN_BPF_SRC bulunamadı!"
     exit 1
 fi
 
-cp "$BPF_SRC" "$BPF_DEST"
-chmod 644 "$BPF_DEST"
-echo "✓ Sürücü ikili dosyası /etc/udev-hid-bpf/ altına yerleştirildi."
+if [ ! -f "$SENSOR_BPF_SRC" ]; then
+    echo "HATA: $SENSOR_BPF_SRC bulunamadı!"
+    exit 1
+fi
 
-echo "=== [2/4] Donanıma ve Kernel'a Filtre Uygulanıyor ==="
+cp "$PEN_BPF_SRC" "$PEN_BPF_DEST"
+chmod 644 "$PEN_BPF_DEST"
+echo "✓ Kalem BPF sürücüsü /etc/udev-hid-bpf/ altına yerleştirildi."
+
+cp "$SENSOR_BPF_SRC" "$SENSOR_BPF_DEST"
+chmod 644 "$SENSOR_BPF_DEST"
+echo "✓ Sensör/İvmeölçer BPF sürücüsü /etc/udev-hid-bpf/ altına yerleştirildi."
+
+echo "=== [2/4] Donanıma ve Kernel'a Filtreler Uygulanıyor ==="
+# Kalem filtresi (Wacom Digitizer)
 for dev in /sys/bus/hid/devices/*056A:5363*; do
     if [ -d "$dev" ]; then
-        echo "Donanım cihazına bağlanıyor: $dev"
-        /usr/bin/udev-hid-bpf add --replace "$dev" "$BPF_DEST" || true
+        echo "Kalem cihazına bağlanıyor: $dev"
+        /usr/bin/udev-hid-bpf add --replace "$dev" "$PEN_BPF_DEST" || true
+    fi
+done
+
+# Sensör / İvmeölçer filtresi (AMD-SFH)
+for dev in /sys/bus/hid/devices/*1022:0001*; do
+    if [ -d "$dev" ]; then
+        echo "Sensör/İvmeölçer cihazına bağlanıyor: $dev"
+        /usr/bin/udev-hid-bpf add --replace "$dev" "$SENSOR_BPF_DEST" || true
     fi
 done
 
 echo "=== [3/4] Kalıcılık Kuralları (Udev & Systemd Boot/Sleep) Yazılıyor ==="
-# Udev kuralı (Cihaz takıldığında veya uyandığında otomatik yükler)
+# Kalem Udev kuralı
 tee /etc/udev/rules.d/99-hid-bpf-lenovo_pen_fix.rules > /dev/null << 'EOF'
 ACTION!="add|remove", GOTO="hid_bpf_end"
 SUBSYSTEM!="hid", GOTO="hid_bpf_end"
@@ -55,16 +80,34 @@ ACTION=="remove", ENV{MODALIAS}=="hid:b0018g*v0000056Ap00005363", RUN{program}+=
 LABEL="hid_bpf_end"
 EOF
 
+# Sensör Udev kuralı
+tee /etc/udev/rules.d/99-hid-bpf-lenovo_sensor_fix.rules > /dev/null << 'EOF'
+ACTION!="add|remove", GOTO="hid_bpf_end"
+SUBSYSTEM!="hid", GOTO="hid_bpf_end"
+
+# AMD SFH Accelerometer (Screen Auto-Rotation)
+ACTION=="add", ENV{MODALIAS}=="hid:b0020g0003v00001022p00000001", RUN{program}+="/usr/bin/udev-hid-bpf add --replace $sys$devpath /etc/udev-hid-bpf/lenovo_sensor_fix.bpf.o"
+ACTION=="remove", ENV{MODALIAS}=="hid:b0020g0003v00001022p00000001", RUN{program}+="/usr/bin/udev-hid-bpf remove $sys$devpath"
+ACTION=="add", ENV{MODALIAS}=="hid:b0020g*v00001022p00000001", RUN{program}+="/usr/bin/udev-hid-bpf add --replace $sys$devpath /etc/udev-hid-bpf/lenovo_sensor_fix.bpf.o"
+ACTION=="remove", ENV{MODALIAS}=="hid:b0020g*v00001022p00000001", RUN{program}+="/usr/bin/udev-hid-bpf remove $sys$devpath"
+
+LABEL="hid_bpf_end"
+EOF
+
 # Systemd boot servisi
 tee /etc/systemd/system/lenovo-pen-fix.service > /dev/null << 'EOF'
 [Unit]
-Description=Lenovo Digital Pen 2 HID-BPF Driver Fix
+Description=Lenovo Yoga 7 2-in-1 Stylus & Sensor HID-BPF Hardware Fix
 After=systemd-udevd.service suspend.target hibernate.target hybrid-sleep.target suspend-then-hibernate.target
 Wants=systemd-udevd.service
 
 [Service]
 Type=oneshot
-ExecStart=/bin/bash -c 'for dev in /sys/bus/hid/devices/*056A:5363*; do [ -d "$dev" ] && /usr/bin/udev-hid-bpf add --replace "$dev" /etc/udev-hid-bpf/lenovo_pen_fix.bpf.o; done'
+ExecStart=/bin/bash -c '\
+for dev in /sys/bus/hid/devices/*056A:5363*; do [ -d "$dev" ] && [ -f /etc/udev-hid-bpf/lenovo_pen_fix.bpf.o ] && /usr/bin/udev-hid-bpf add --replace "$dev" /etc/udev-hid-bpf/lenovo_pen_fix.bpf.o; done; \
+for dev in /sys/bus/hid/devices/*1022:0001*; do [ -d "$dev" ] && [ -f /etc/udev-hid-bpf/lenovo_sensor_fix.bpf.o ] && /usr/bin/udev-hid-bpf add --replace "$dev" /etc/udev-hid-bpf/lenovo_sensor_fix.bpf.o; done; \
+systemctl restart iio-sensor-proxy.service || true\
+'
 RemainAfterExit=yes
 
 [Install]
@@ -86,8 +129,9 @@ systemctl daemon-reload
 systemctl enable --now lenovo-pen-fix.service
 udevadm control --reload
 udevadm trigger --subsystem-match=hid || true
+systemctl restart iio-sensor-proxy || true
 
-echo "=== [4/4] GNOME Evrensel Kalem Ayarları Yapılandırılıyor ==="
+echo "=== [4/4] GNOME Evrensel Kalem & Ekran Ayarları Yapılandırılıyor ==="
 USER_NAME="${SUDO_USER:-$USER}"
 USER_UID="$(id -u "$USER_NAME")"
 
@@ -98,13 +142,14 @@ dconf write /org/gnome/desktop/peripherals/stylus/80e4ef9b/eraser-button-action 
 dconf write /org/gnome/desktop/peripherals/stylus/80e4ef9b/eraser-button-mode "'button'"
 dconf write /org/gnome/desktop/peripherals/stylus/80e4ef9b/button-action "'forward'"
 dconf write /org/gnome/desktop/peripherals/stylus/80e4ef9b/pressure-curve "[0, 0, 100, 100]"
+gsettings set org.gnome.settings-daemon.peripherals.touchscreen orientation-lock false
 USER_EOF
 
 echo ""
 echo "=============================================================================="
-echo "✓ BAŞARILI: Kalem donanım düzeltmesi kalıcı olarak uygulandı!"
-echo "  - Proximity kfifo taşma (takılma) sorunu giderildi."
+echo "✓ BAŞARILI: Kalem ve Ekran Döndürme donanım düzeltmesi kalıcı olarak uygulandı!"
+echo "  - Kalem: Proximity kfifo taşma (takılma) sorunu giderildi."
 echo "  - Alt tuş: Evrensel Orta Tık (Chrome sekmeleri, Blender Orbit vb.)."
-echo "  - Üst tuş: İleri / Pan."
+echo "  - Sensör: AMD-SFH ivmeölçer hatası giderildi (ekran otomatik dönmesi aktif)."
 echo "  - Yeniden başlatma ve uyku modundan sonra da otomatik çalışır."
 echo "=============================================================================="
