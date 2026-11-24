@@ -1,0 +1,336 @@
+#!/usr/bin/env python3
+"""
+Lenovo Yoga 7 2-in-1 Screen Auto-Rotation Daemon for GNOME Wayland
+Author: Auxerov & Antigravity
+Description:
+  Listens to net.hadess.SensorProxy (iio-sensor-proxy) on the System Bus and
+  dynamically rotates GNOME Mutter's display configuration via DisplayConfig
+  ApplyMonitorsConfig on the Session Bus.
+  
+  Bypasses Mutter's clamshell restriction (PanelOrientationManaged=false)
+  while fully respecting GNOME's orientation-lock toggle, external monitors,
+  and automatically recovers across sleep/suspend/resume cycles.
+"""
+
+import sys
+import time
+import signal
+import logging
+import gi
+
+gi.require_version('Gio', '2.0')
+from gi.repository import Gio, GLib
+
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s [%(levelname)s] %(message)s',
+    datefmt='%Y-%m-%d %H:%M:%S'
+)
+log = logging.getLogger('yoga-autorotate')
+
+# Sensor orientation -> Mutter transform mapping:
+# 0: Normal (0 deg)
+# 1: 90 deg (left-up)
+# 2: 180 deg (bottom-up)
+# 3: 270 deg (right-up)
+ORIENTATION_MAP = {
+    'normal': 0,
+    'left-up': 1,
+    'bottom-up': 2,
+    'right-up': 3,
+}
+
+TRANSFORM_NAMES = {
+    0: 'Landscape (Normal)',
+    1: 'Portrait (Left Up - 90°)',
+    2: 'Inverted Landscape (Bottom Up - 180°)',
+    3: 'Inverted Portrait (Right Up - 270°)',
+}
+
+class YogaAutoRotate:
+    def __init__(self):
+        self.loop = GLib.MainLoop()
+        self.system_bus = Gio.bus_get_sync(Gio.BusType.SYSTEM, None)
+        self.session_bus = Gio.bus_get_sync(Gio.BusType.SESSION, None)
+        
+        self.sensor_proxy = None
+        self.mutter_proxy = None
+        self.settings = None
+        
+        self.current_transform = None
+        self.current_sensor_orientation = 'normal'
+        self.is_claimed = False
+        
+        self._init_settings()
+        self._init_mutter()
+        self._init_sensor()
+        self._init_login1()
+        
+    def _init_settings(self):
+        try:
+            self.settings = Gio.Settings.new('org.gnome.settings-daemon.peripherals.touchscreen')
+            self.settings.connect('changed::orientation-lock', self._on_lock_changed)
+            log.info(f"GNOME touchscreen settings loaded. orientation-lock = {self.is_orientation_locked()}")
+        except Exception as e:
+            log.warning(f"Could not load touchscreen settings: {e}")
+            self.settings = None
+
+    def is_orientation_locked(self):
+        if self.settings:
+            try:
+                return self.settings.get_boolean('orientation-lock')
+            except Exception:
+                pass
+        return False
+
+    def _on_lock_changed(self, settings, key):
+        locked = self.is_orientation_locked()
+        log.info(f"Orientation lock changed: {locked}")
+        if not locked:
+            self.sync_orientation()
+
+    def _init_mutter(self):
+        try:
+            self.mutter_proxy = Gio.DBusProxy.new_sync(
+                self.session_bus,
+                Gio.DBusProxyFlags.NONE,
+                None,
+                'org.gnome.Mutter.DisplayConfig',
+                '/org/gnome/Mutter/DisplayConfig',
+                'org.gnome.Mutter.DisplayConfig',
+                None
+            )
+            # Listen for monitor changes (e.g. plugging in external screen)
+            self.mutter_proxy.connect('g-signal', self._on_mutter_signal)
+            log.info("Connected to org.gnome.Mutter.DisplayConfig")
+        except Exception as e:
+            log.error(f"Failed to connect to Mutter DisplayConfig: {e}")
+
+    def _on_mutter_signal(self, proxy, sender_name, signal_name, parameters):
+        if signal_name == 'MonitorsChanged':
+            log.debug("MonitorsChanged signal received")
+            # Re-read current transform
+            self._update_current_transform_from_mutter()
+
+    def _update_current_transform_from_mutter(self):
+        try:
+            state = self.mutter_proxy.call_sync('GetCurrentState', None, Gio.DBusCallFlags.NONE, -1, None)
+            serial, monitors, logical_monitors, props = state.unpack()
+            for lm in logical_monitors:
+                x, y, scale, transform, primary, specs, lm_props = lm
+                for s in specs:
+                    if s[0].startswith('eDP') or primary:
+                        self.current_transform = transform
+                        return
+        except Exception as e:
+            log.debug(f"Could not read current Mutter transform: {e}")
+
+    def _init_sensor(self):
+        try:
+            self.sensor_proxy = Gio.DBusProxy.new_sync(
+                self.system_bus,
+                Gio.DBusProxyFlags.NONE,
+                None,
+                'net.hadess.SensorProxy',
+                '/net/hadess/SensorProxy',
+                'net.hadess.SensorProxy',
+                None
+            )
+            self.sensor_proxy.connect('g-properties-changed', self._on_sensor_properties_changed)
+            
+            # Watch for SensorProxy service restarts
+            self.system_bus.signal_subscribe(
+                'org.freedesktop.DBus',
+                'org.freedesktop.DBus',
+                'NameOwnerChanged',
+                '/org/freedesktop/DBus',
+                'net.hadess.SensorProxy',
+                Gio.DBusSignalFlags.NONE,
+                self._on_sensor_name_owner_changed,
+                None
+            )
+            
+            self.claim_accelerometer()
+        except Exception as e:
+            log.error(f"Failed to connect to net.hadess.SensorProxy: {e}")
+
+    def _on_sensor_name_owner_changed(self, connection, sender, path, iface, signal, params, user_data):
+        name, old_owner, new_owner = params.unpack()
+        if new_owner:
+            log.info("iio-sensor-proxy restarted, re-claiming accelerometer...")
+            GLib.timeout_add(1000, self.claim_accelerometer)
+
+    def claim_accelerometer(self):
+        if not self.sensor_proxy:
+            return False
+        try:
+            self.sensor_proxy.call_sync('ClaimAccelerometer', None, Gio.DBusCallFlags.NONE, -1, None)
+            self.is_claimed = True
+            log.info("ClaimAccelerometer: SUCCESS")
+            
+            # Read initial orientation
+            v = self.sensor_proxy.get_cached_property('AccelerometerOrientation')
+            if v:
+                self.current_sensor_orientation = v.get_string()
+                log.info(f"Initial sensor orientation: {self.current_sensor_orientation}")
+                self.sync_orientation()
+            return False  # for GLib timeout
+        except Exception as e:
+            log.warning(f"ClaimAccelerometer attempt failed: {e}")
+            self.is_claimed = False
+            return False
+
+    def _init_login1(self):
+        """Watch for system sleep/resume (PrepareForSleep)."""
+        try:
+            self.system_bus.signal_subscribe(
+                'org.freedesktop.login1',
+                'org.freedesktop.login1.Manager',
+                'PrepareForSleep',
+                '/org/freedesktop/login1',
+                None,
+                Gio.DBusSignalFlags.NONE,
+                self._on_prepare_for_sleep,
+                None
+            )
+            log.info("Subscribed to logind PrepareForSleep signal")
+        except Exception as e:
+            log.warning(f"Could not subscribe to PrepareForSleep: {e}")
+
+    def _on_prepare_for_sleep(self, connection, sender, path, iface, signal, params, user_data):
+        sleeping = params.unpack()[0]
+        if sleeping:
+            log.info("System preparing for sleep...")
+        else:
+            log.info("System resumed from sleep! Waiting 1.5s for sensor to settle...")
+            # Wait for AMD-SFH / iio-sensor-proxy to settle after resume
+            GLib.timeout_add(1500, self._on_resume_sync)
+
+    def _on_resume_sync(self):
+        log.info("Executing post-sleep sensor check & sync...")
+        self.claim_accelerometer()
+        self.sync_orientation()
+        return False
+
+    def _on_sensor_properties_changed(self, proxy, changed_properties, invalidated_properties):
+        changed = changed_properties.unpack()
+        if 'AccelerometerOrientation' in changed:
+            new_orientation = changed['AccelerometerOrientation']
+            log.info(f"Sensor orientation event: {new_orientation}")
+            self.current_sensor_orientation = new_orientation
+            self.sync_orientation()
+
+    def sync_orientation(self):
+        if self.is_orientation_locked():
+            log.debug("Orientation is locked by user, skipping rotation.")
+            return
+
+        target_transform = ORIENTATION_MAP.get(self.current_sensor_orientation)
+        if target_transform is None:
+            log.debug(f"Orientation '{self.current_sensor_orientation}' has no mapping, ignoring.")
+            return
+
+        self.apply_transform(target_transform)
+
+    def apply_transform(self, target_transform):
+        if not self.mutter_proxy:
+            return
+
+        max_retries = 3
+        for attempt in range(max_retries):
+            try:
+                state = self.mutter_proxy.call_sync('GetCurrentState', None, Gio.DBusCallFlags.NONE, -1, None)
+                serial, monitors, logical_monitors, properties = state.unpack()
+
+                # Don't auto-rotate if external monitors are connected
+                has_external = properties.get('has-external-monitor', False)
+                if has_external:
+                    log.debug("External monitor connected, skipping auto-rotation.")
+                    return
+
+                # Build active modes map
+                active_modes = {}
+                for m in monitors:
+                    spec, modes, props = m
+                    connector = spec[0]
+                    for mode in modes:
+                        mode_id, w, h, refresh, pref_scale, sup_scales, mode_props = mode
+                        if mode_props.get('is-current', False):
+                            active_modes[connector] = mode_id
+                            break
+
+                need_update = False
+                new_logical_monitors = []
+                for lm in logical_monitors:
+                    x, y, scale, transform, primary, specs, lm_props = lm
+                    new_specs = []
+                    is_target_monitor = False
+
+                    for s in specs:
+                        conn = s[0]
+                        mode_id = active_modes.get(conn, '')
+                        new_specs.append((conn, mode_id, {}))
+                        if conn.startswith('eDP') or primary or len(logical_monitors) == 1:
+                            is_target_monitor = True
+
+                    new_transform = transform
+                    if is_target_monitor:
+                        if transform != target_transform:
+                            new_transform = target_transform
+                            need_update = True
+                        self.current_transform = new_transform
+
+                    new_logical_monitors.append((x, y, scale, new_transform, primary, new_specs))
+
+                if not need_update:
+                    log.debug(f"Display transform is already {target_transform} ({TRANSFORM_NAMES.get(target_transform, '')})")
+                    return
+
+                log.info(f"Rotating screen to {TRANSFORM_NAMES.get(target_transform, target_transform)} (transform={target_transform})...")
+                # method=1: CONFIG_METHOD_TEMPORARY (immediate, dynamic, no confirmation prompt)
+                params = GLib.Variant('(uua(iiduba(ssa{sv}))a{sv})', (serial, 1, new_logical_monitors, {}))
+                self.mutter_proxy.call_sync('ApplyMonitorsConfig', params, Gio.DBusCallFlags.NONE, -1, None)
+                log.info(f"✓ Successfully rotated screen to {TRANSFORM_NAMES.get(target_transform, target_transform)}")
+                return
+            except Exception as e:
+                log.warning(f"ApplyMonitorsConfig attempt {attempt + 1} failed: {e}")
+                time.sleep(0.2)
+
+    def run(self):
+        log.info("Yoga 7 Auto-Rotation Daemon started and listening for sensor events.")
+        # Setup periodic heartbeat every 15s to keep claim alive and sync
+        GLib.timeout_add_seconds(15, self._heartbeat)
+        
+        try:
+            self.loop.run()
+        except (KeyboardInterrupt, SystemExit):
+            self.stop()
+
+    def _heartbeat(self):
+        if not self.is_claimed:
+            self.claim_accelerometer()
+        return True
+
+    def stop(self):
+        log.info("Stopping daemon...")
+        if self.sensor_proxy and self.is_claimed:
+            try:
+                self.sensor_proxy.call_sync('ReleaseAccelerometer', None, Gio.DBusCallFlags.NONE, -1, None)
+            except Exception:
+                pass
+        self.loop.quit()
+
+def main():
+    daemon = YogaAutoRotate()
+
+    def handle_signal(sig, frame):
+        daemon.stop()
+        sys.exit(0)
+
+    signal.signal(signal.SIGINT, handle_signal)
+    signal.signal(signal.SIGTERM, handle_signal)
+
+    daemon.run()
+
+if __name__ == '__main__':
+    main()

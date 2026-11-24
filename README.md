@@ -27,7 +27,7 @@ cd ~/Documents/"Lenovo 2 in 1 Settings"
 | File Name | Description & Core Purpose |
 | :--- | :--- |
 | **`apply-all.sh`** | **Master Runner:** Executes all configuration scripts sequentially with a single upfront `sudo` prompt. |
-| **`01-pen-and-touch-fix.sh`** | **Stylus, Touchscreen & Screen Auto-Rotation Patch:** Injects custom HID-BPF kernel filters for both the Lenovo Digital Pen 2 / Wacom HID 5363 digitizer and AMD Sensor Fusion Hub (AMD-SFH `1022:0001`). For stylus: converts the lower barrel button's eraser report into `BTN_STYLUS2`; suppresses accidental tip clicks when holding barrel buttons on screen; sets up GNOME stylus mappings (Lower: Middle Click/Orbit, Upper: Forward/Pan). For auto-rotation: patches the AMD-SFH accelerometer HID report descriptor mismatch (resolving `Event data for report 1 was too short (15 vs 14)` dropped packet errors in the Linux kernel) to restore physical convertible screen rotation in GNOME Wayland. Includes full systemd boot and sleep/resume persistence. |
+| **`01-pen-and-touch-fix.sh`** | **Stylus, Touchscreen & Screen Auto-Rotation Patch:** Injects custom HID-BPF kernel filters for both the Lenovo Digital Pen 2 / Wacom HID 5363 digitizer and AMD Sensor Fusion Hub (AMD-SFH `1022:0001`). For stylus: converts the lower barrel button's eraser report into `BTN_STYLUS2`; suppresses accidental tip clicks when holding barrel buttons on screen; sets up GNOME stylus mappings (Lower: Middle Click/Orbit, Upper: Forward/Pan). For auto-rotation: patches the AMD-SFH accelerometer HID report descriptor mismatch (resolving `Event data for report 1 was too short (15 vs 14)` dropped packet errors in the Linux kernel) and installs the lightweight user daemon `yoga-autorotate` (`yoga-autorotate.service`) that dynamically connects `iio-sensor-proxy` to GNOME Mutter Wayland's `DisplayConfig.ApplyMonitorsConfig` (bypassing GNOME's clamshell gating while respecting orientation-lock and handling sleep/resume seamlessly). |
 | **`02-sleep-and-suspend-to-disk.sh`** | **Mac-style Smart Sleep & SSD Hibernation:** Keeps the system in fast RAM sleep for the first 30 minutes (instant resume). After 30 minutes, it writes the entire session to SSD swap (`suspend-then-hibernate`) for zero battery drain. Also disables PCIe/ACPI spurious wakeups (`GPP6`/`GPP7`) to prevent overheating in a backpack. |
 | **`03-battery-conservation.sh`** | **Battery Health Conservation:** Limits battery charge to ~80% when plugged in to prevent lithium-ion degradation. Also installs the terminal utility `bat-limit` (`bat-limit on`, `bat-limit off`, `bat-limit status`). |
 | **`04-bluetooth-power-fix.sh`** | **Realtek RTL8852CE Wi-Fi/Bluetooth Coexistence & Audio Stutter Fix:** Resolves the known Realtek firmware coexistence regression (`rtw8852c_fw-2.bin`) that chokes Bluetooth audio during network activity, disables USB autosuspend (`btusb enable_autosuspend=n`), turns off Wi-Fi radio power cycling (`rtw89_core disable_ps_mode=y`) and PCIe ASPM L1/L1SS transitions, disables NetworkManager Wi-Fi powersave, tunes BlueZ, and elevates WirePlumber audio priority to eliminate packet drops and audio cutouts. |
@@ -52,6 +52,11 @@ cd ~/Documents/"Lenovo 2 in 1 Settings"
   - `yogatouch --profile <name>` : Switches active profile directly from command line.
   - `systemctl --user restart yogatouch.service` : Restarts the background gesture monitor service.
   - `~/.config/yogatouch/config.yaml` : YAML configuration file (auto-reloads on save).
+- **Auto-Rotation Control:**
+  - `systemctl --user status yoga-autorotate.service`  : Checks background auto-rotation daemon status.
+  - `systemctl --user restart yoga-autorotate.service` : Restarts auto-rotation daemon.
+  - `gsettings set org.gnome.settings-daemon.peripherals.touchscreen orientation-lock true`  : Locks rotation.
+  - `gsettings set org.gnome.settings-daemon.peripherals.touchscreen orientation-lock false` : Unlocks rotation.
 - **Battery Conservation Control:**
   - `bat-limit on`     : Caps charging at ~80% (ideal for daily AC power use).
   - `bat-limit off`    : Charges up to 100% (ideal before traveling).

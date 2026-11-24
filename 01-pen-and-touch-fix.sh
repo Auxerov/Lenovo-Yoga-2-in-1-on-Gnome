@@ -131,11 +131,41 @@ udevadm control --reload
 udevadm trigger --subsystem-match=hid || true
 systemctl restart iio-sensor-proxy || true
 
-echo "=== [4/4] GNOME Evrensel Kalem & Ekran Ayarları Yapılandırılıyor ==="
+echo "=== [4/4] GNOME Evrensel Kalem & Ekran Döndürme Yapılandırılıyor ==="
 USER_NAME="${SUDO_USER:-$USER}"
 USER_UID="$(id -u "$USER_NAME")"
+USER_HOME=$(eval echo "~$USER_NAME")
 
-# Kullanıcı oturumundaki dconf ayarlarını güncelle
+# yoga-autorotate daemon'unu kullanıcı dizinine kur
+mkdir -p "${USER_HOME}/.local/bin" "${USER_HOME}/.config/systemd/user"
+if [ -f "${BPF_DIR}/yoga-autorotate" ]; then
+    cp "${BPF_DIR}/yoga-autorotate" "${USER_HOME}/.local/bin/yoga-autorotate"
+    chmod +x "${USER_HOME}/.local/bin/yoga-autorotate"
+    chown "$USER_NAME:$USER_NAME" "${USER_HOME}/.local/bin/yoga-autorotate"
+fi
+
+# systemd user servisini oluştur
+tee "${USER_HOME}/.config/systemd/user/yoga-autorotate.service" > /dev/null << 'SERVICE_EOF'
+[Unit]
+Description=Lenovo Yoga 7 Screen Auto-Rotation Daemon for GNOME Wayland
+After=graphical-session.target
+PartOf=graphical-session.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/python3 %h/.local/bin/yoga-autorotate
+Restart=always
+RestartSec=2
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=graphical-session.target
+SERVICE_EOF
+
+chown -R "$USER_NAME:$USER_NAME" "${USER_HOME}/.config/systemd/user/yoga-autorotate.service"
+
+# Kullanıcı oturumundaki dconf ayarlarını ve servisi aktifleştir
 sudo -u "$USER_NAME" DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/${USER_UID}/bus" bash << 'USER_EOF'
 dconf write /org/gnome/desktop/peripherals/stylus/80e4ef9b/secondary-button-action "'middle'"
 dconf write /org/gnome/desktop/peripherals/stylus/80e4ef9b/eraser-button-action "'middle'"
@@ -143,6 +173,9 @@ dconf write /org/gnome/desktop/peripherals/stylus/80e4ef9b/eraser-button-mode "'
 dconf write /org/gnome/desktop/peripherals/stylus/80e4ef9b/button-action "'forward'"
 dconf write /org/gnome/desktop/peripherals/stylus/80e4ef9b/pressure-curve "[0, 0, 100, 100]"
 gsettings set org.gnome.settings-daemon.peripherals.touchscreen orientation-lock false
+
+systemctl --user daemon-reload
+systemctl --user enable --now yoga-autorotate.service || true
 USER_EOF
 
 echo ""
@@ -150,6 +183,7 @@ echo "==========================================================================
 echo "✓ BAŞARILI: Kalem ve Ekran Döndürme donanım düzeltmesi kalıcı olarak uygulandı!"
 echo "  - Kalem: Proximity kfifo taşma (takılma) sorunu giderildi."
 echo "  - Alt tuş: Evrensel Orta Tık (Chrome sekmeleri, Blender Orbit vb.)."
-echo "  - Sensör: AMD-SFH ivmeölçer hatası giderildi (ekran otomatik dönmesi aktif)."
+echo "  - Sensör: AMD-SFH ivmeölçer donanım hatası kernel seviyesinde giderildi."
+echo "  - Ekran: GNOME Wayland otomatik ekran döndürme köprüsü (yoga-autorotate) aktif."
 echo "  - Yeniden başlatma ve uyku modundan sonra da otomatik çalışır."
 echo "=============================================================================="
