@@ -20,7 +20,7 @@ HID_BPF_CONFIG(
 SEC(HID_BPF_DEVICE_EVENT)
 int BPF_PROG(lenovo_pen_fix_eraser, struct hid_bpf_ctx *hctx)
 {
-	__u8 *data = hid_bpf_get_data(hctx, 0 /* offset */, 10 /* size */);
+	__u8 *data = hid_bpf_get_data(hctx, 0 /* offset */, 14 /* size */);
 
 	if (!data)
 		return 0;
@@ -28,6 +28,20 @@ int BPF_PROG(lenovo_pen_fix_eraser, struct hid_bpf_ctx *hctx)
 	/* Check for stylus report IDs (0x14 = 20, 0x0b = 11) */
 	if (data[0] != 0x14 && data[0] != 0x0b)
 		return 0;
+
+	/*
+	 * Inject a non-zero transducer serial number (0x866c) into data[10..13]
+	 * (HID_DG_TOOLSERIALNUMBER). On Lenovo Digital Pen 2 / WACF2200, the hardware
+	 * sends serial = 0. When serial is 0, wacom_wac_pen_serial_enforce() in wacom.ko
+	 * flags every report as invalid, queues them into an internal kfifo queue, and
+	 * drops events once the kfifo fills up ("kfifo has filled, starting to drop events").
+	 * Eventually wacom_idleprox_timeout triggers and drops proximity ("tool appears to be hung in-prox").
+	 *
+	 * Providing a valid non-zero serial causes wacom.ko to immediately flush and
+	 * bypass the kfifo queue on all subsequent reports, completely eliminating
+	 * pen stuttering, freezing, and missed strokes.
+	 */
+	*(__u32 *)&data[10] = 0x0000866c;
 
 	/*
 	 * When lower barrel button (Button 1) is pressed on Lenovo Digital Pen 2,
@@ -42,14 +56,11 @@ int BPF_PROG(lenovo_pen_fix_eraser, struct hid_bpf_ctx *hctx)
 	 * and pressure (bytes 6-7). This prevents accidental Left Clicks / draw strokes
 	 * while navigating (Orbit or Pan) when the pen tip touches or grazes the screen.
 	 */
-	if (data[1] & 0x0c) {
-		data[1] &= ~0x0d; /* clear Eraser (0x04), Invert (0x08), and Tip Switch (0x01) */
-		data[1] |= 0x10;  /* set Secondary Barrel Switch (BTN_STYLUS2); preserve In-Range as reported by hardware */
-		data[6] = 0;      /* clear pressure */
-		data[7] = 0;
-	} else if (data[1] & 0x02) {
-		/* Upper barrel button (Button 2) is active (BTN_STYLUS) */
-		data[1] &= ~0x01; /* clear Tip Switch */
+	if (data[1] & 0x0e) {
+		if (data[1] & 0x0c) {
+			data[1] |= 0x10;  /* set Secondary Barrel Switch (BTN_STYLUS2) */
+		}
+		data[1] &= 0xf2;  /* clear Eraser (0x04), Invert (0x08), and Tip Switch (0x01) */
 		data[6] = 0;      /* clear pressure */
 		data[7] = 0;
 	}
